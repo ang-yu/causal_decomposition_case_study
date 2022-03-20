@@ -1,0 +1,645 @@
+
+rm(list=ls(all=TRUE))
+library("Hmisc")
+library("readr")
+library("Amelia")
+
+options(scipen=999)
+
+setwd("/Users/Ang/Desktop/Research/Causal_decomposition_empirical_study/Data")
+
+load("data.RData")
+colnames(data)
+
+colnames(data)[colnames(data) %in% "CASEID_1979"] <- "id"
+
+table(data$AGEATINT_1979)
+data <- data[data$AGEATINT_1979<=17,]   # 11286 to 5583
+# I decide to restrict the sample to age 14-17 in 1979. Zhou uses 14-18. Karlson uses 14-16. 
+
+# I downloaded the PCEPI data from https://fred.stlouisfed.org/series/PCEPI
+pce <- read.csv("PCEPI.csv")
+
+pce$year <- substr(pce$DATE, 1, 4)
+table(pce$year)
+basline <- mean(pce$PCEPI[pce$year==2019])  # I'll transform the family income to constant dollars in 2019
+
+## parental income measures
+
+summary(data$TNFI_TRUNC_1979)
+data$income79 <- data$TNFI_TRUNC_1979/mean(pce$PCEPI[pce$year==1979])*basline
+summary(data$income79)
+
+data$income80 <- data$TNFI_TRUNC_1980/mean(pce$PCEPI[pce$year==1980])*basline
+data$income81 <- data$TNFI_TRUNC_1981/mean(pce$PCEPI[pce$year==1981])*basline
+data$income82 <- data$TNFI_TRUNC_1982/mean(pce$PCEPI[pce$year==1982])*basline
+data$income83 <- data$TNFI_TRUNC_1983/mean(pce$PCEPI[pce$year==1983])*basline
+
+# divide family income by the square root of family size (following Zhou)
+data$income79_per <- data$income79/sqrt(data$FAMSIZE_1979)
+data$income80_per <- data$income80/sqrt(data$FAMSIZE_1980)
+data$income81_per <- data$income81/sqrt(data$FAMSIZE_1981)
+data$income82_per <- data$income82/sqrt(data$FAMSIZE_1982)
+data$income83_per <- data$income83/sqrt(data$FAMSIZE_1983)
+
+sum(is.na(data$income79_per))
+sum(is.na(data$income80_per)|is.na(data$income79_per))
+sum(is.na(data$income81_per)|is.na(data$income80_per)|is.na(data$income79_per))
+
+temp_data <- data[,c("income79_per","income80_per","income81_per","income82_per","income83_per")]
+temp_data$missing <- rowSums(is.na(temp_data))
+table(temp_data$missing)
+# I don't know how Zhou has a sample loss of 745 by dropping people with missing origin status. He uses an average of family income in the first 5 rounds. 
+# I decide also to use the first-3-round average. 
+# First, I want to preserve as many as possible data points.
+# Second, 1981 survey year records income in 1980, when the oldest respondents in my sample are 18. Using survery years later than 1981 is inappropriate as reverse causality may be incurred. 
+
+# And I'll follow Zhou to calculate income percentile based on survery weights
+# for 1979 (survey year) family income, I'll use the weights generated for those who have valid family income in 1979 (survey year)
+# get the id for those people
+write.csv(data$id[!is.na(data$income79_per)], "id_valid_79_income.csv", row.names = F)
+write.csv(data$id[!is.na(data$income80_per)], "id_valid_80_income.csv", row.names = F)
+write.csv(data$id[!is.na(data$income81_per)], "id_valid_81_income.csv", row.names = F)
+
+svyweight_79 <- read.table("customweight_nlsy79_5e71a2412d1ab/customweight_nlsy79_5e71a2412d1ab.dat")
+colnames(svyweight_79) <- c("id","svyweight_79")
+svyweight_79$svyweight_79 <- as.numeric(svyweight_79$svyweight_79)
+data <- merge(data, svyweight_79, by= "id", all.x = T)
+
+svyweight_80 <- read.table("customweight_nlsy79_5e72962d15982/customweight_nlsy79_5e72962d15982.dat")
+colnames(svyweight_80) <- c("id","svyweight_80")
+svyweight_80$svyweight_80 <- as.numeric(svyweight_80$svyweight_80)
+data <- merge(data, svyweight_80, by= "id", all.x = T)
+
+svyweight_81 <- read.table("customweight_nlsy79_5e7297ab3a166/customweight_nlsy79_5e7297ab3a166.dat")
+colnames(svyweight_81) <- c("id","svyweight_81")
+svyweight_81$svyweight_81 <- as.numeric(svyweight_81$svyweight_81)
+data <- merge(data, svyweight_81, by= "id", all.x = T)
+
+# now, because I need to get the percentile ranks based on weighted data, I will define a new function
+# this function achives basically the same thing as "wtd.rank" in Hmisc pacakge, with one difference
+# wtd.rank inappropriately produce NA in the rank variable for people whose income is the max value in the sample
+# this is because wtd.rank uses the default setting of "approx" with rule=1 instead of 2. 
+# With a left continous function in "approx", the max value will not be ranked under rule 1. 
+# Under rule 2, the max value will get rank=1. (now the range of the rank is [0,1])
+percentile_rank <- function(value, weight) {
+  tab <- wtd.table(value, weights = weight, na.rm = T, normwt = T)
+  approx(tab$x, cumsum(tab$sum.of.weights), xout=value, method="constant", rule=2)$y/sum(!is.na(value))
+}
+
+data$income79_per_rank <- percentile_rank(data$income79_per, data$svyweight_79)
+data$income80_per_rank <- percentile_rank(data$income80_per, data$svyweight_80)
+data$income81_per_rank <- percentile_rank(data$income81_per, data$svyweight_81)
+
+data$parental_income <- rowMeans(data[,c("income79_per_rank","income80_per_rank","income81_per_rank")], na.rm = T)
+data$parental_income_missing <- rowSums(is.na(data[,c("income79_per_rank","income80_per_rank","income81_per_rank")]), na.rm = T)
+data$parental_income_missing <- as.factor(data$parental_income_missing)
+any(is.nan(data$parental_income)) 
+data$parental_income[is.nan(data$parental_income)] <- NA # recode NaN to NA. Nothing worrisome. 
+
+summary(data$parental_income)
+table(data$parental_income_missing)
+
+# generate an alternative measure of income origin in log scale
+summary(data$income79_per)
+data$income79_per_log <- log(data$income79_per+1)
+data$income80_per_log <- log(data$income80_per+1)
+data$income81_per_log <- log(data$income81_per+1)
+data$parental_income_log <- rowMeans(data[,c("income79_per_log","income80_per_log","income81_per_log")], na.rm = T)
+
+summary(data$parental_income_log)
+sum(is.nan(data$parental_income_log))
+sum(is.na(data$income79_per_log)&is.na(data$income80_per_log)&is.na(data$income81_per_log))
+data$parental_income_log[is.nan(data$parental_income_log)] <- NA # recode NaN to NA. Nothing worrisome. 
+# hist(data$parental_income_log)
+
+## own income destination measures
+
+table(data$AGEATINT_1979)
+35-as.numeric(names(table(data$AGEATINT_1979)))+1979+1
+44-as.numeric(names(table(data$AGEATINT_1979)))+1979+1
+# so, in order to get own family income (35-44) for respondents aged 14 to 16 in 1979, I need to get income data from 1998 to 2010
+# Note that survey year reflects income in the previous year
+
+data$income98 <- data$TNFI_TRUNC_1998/mean(pce$PCEPI[pce$year==1998])*basline
+data$income00 <- data$TNFI_TRUNC_2000/mean(pce$PCEPI[pce$year==2000])*basline
+data$income02 <- data$TNFI_TRUNC_2002/mean(pce$PCEPI[pce$year==2002])*basline
+data$income04 <- data$TNFI_TRUNC_2004/mean(pce$PCEPI[pce$year==2004])*basline
+data$income06 <- data$TNFI_TRUNC_2006/mean(pce$PCEPI[pce$year==2006])*basline
+data$income08 <- data$TNFI_TRUNC_2008/mean(pce$PCEPI[pce$year==2008])*basline
+data$income10 <- data$TNFI_TRUNC_2010/mean(pce$PCEPI[pce$year==2010])*basline
+
+
+# divide family income by the square root of family size
+data$income98_per <- data$income98/sqrt(data$FAMSIZE_1998)
+data$income00_per <- data$income00/sqrt(data$FAMSIZE_2000)
+data$income02_per <- data$income02/sqrt(data$FAMSIZE_2002)
+data$income04_per <- data$income04/sqrt(data$FAMSIZE_2004)
+data$income06_per <- data$income06/sqrt(data$FAMSIZE_2006)
+data$income08_per <- data$income08/sqrt(data$FAMSIZE_2008)
+data$income10_per <- data$income10/sqrt(data$FAMSIZE_2010)
+
+write.csv(data$id[!is.na(data$income98_per)], "id_valid_98_income.csv", row.names = F)
+write.csv(data$id[!is.na(data$income00_per)], "id_valid_00_income.csv", row.names = F)
+write.csv(data$id[!is.na(data$income02_per)], "id_valid_02_income.csv", row.names = F)
+write.csv(data$id[!is.na(data$income04_per)], "id_valid_04_income.csv", row.names = F)
+write.csv(data$id[!is.na(data$income06_per)], "id_valid_06_income.csv", row.names = F)
+write.csv(data$id[!is.na(data$income08_per)], "id_valid_08_income.csv", row.names = F)
+write.csv(data$id[!is.na(data$income10_per)], "id_valid_10_income.csv", row.names = F)
+
+svyweight_98 <- read.table("customweight_nlsy79_5e71a2f5361fa/customweight_nlsy79_5e71a2f5361fa.dat")
+colnames(svyweight_98) <- c("id","svyweight_98")
+svyweight_98$svyweight_98 <- as.numeric(svyweight_98$svyweight_98)
+data <- merge(data, svyweight_98, by= "id", all.x = T)
+data$income98_per_rank <- percentile_rank(data$income98_per, data$svyweight_98)
+
+svyweight_00 <- read.table("customweight_nlsy79_5e71a33228f54/customweight_nlsy79_5e71a33228f54.dat")
+colnames(svyweight_00) <- c("id","svyweight_00")
+svyweight_00$svyweight_00 <- as.numeric(svyweight_00$svyweight_00)
+data <- merge(data, svyweight_00, by= "id", all.x = T)
+data$income00_per_rank <- percentile_rank(data$income00_per, data$svyweight_00)
+
+svyweight_02 <- read.table("customweight_nlsy79_5e71a37243c58/customweight_nlsy79_5e71a37243c58.dat")
+colnames(svyweight_02) <- c("id","svyweight_02")
+svyweight_02$svyweight_02 <- as.numeric(svyweight_02$svyweight_02)
+data <- merge(data, svyweight_02, by= "id", all.x = T)
+data$income02_per_rank <- percentile_rank(data$income02_per, data$svyweight_02)
+
+svyweight_04 <- read.table("customweight_nlsy79_5e71a3be52666/customweight_nlsy79_5e71a3be52666.dat")
+colnames(svyweight_04) <- c("id","svyweight_04")
+svyweight_04$svyweight_04 <- as.numeric(svyweight_04$svyweight_04)
+data <- merge(data, svyweight_04, by= "id", all.x = T)
+data$income04_per_rank <- percentile_rank(data$income04_per, data$svyweight_04)
+
+svyweight_06 <- read.table("customweight_nlsy79_5e71a3f36f61c/customweight_nlsy79_5e71a3f36f61c.dat")
+colnames(svyweight_06) <- c("id","svyweight_06")
+svyweight_06$svyweight_06 <- as.numeric(svyweight_06$svyweight_06)
+data <- merge(data, svyweight_06, by= "id", all.x = T)
+data$income06_per_rank <- percentile_rank(data$income06_per, data$svyweight_06)
+
+svyweight_08 <- read.table("customweight_nlsy79_5e71a427759ad/customweight_nlsy79_5e71a427759ad.dat")
+colnames(svyweight_08) <- c("id","svyweight_08")
+svyweight_08$svyweight_08 <- as.numeric(svyweight_08$svyweight_08)
+data <- merge(data, svyweight_08, by= "id", all.x = T)
+data$income08_per_rank <- percentile_rank(data$income08_per, data$svyweight_08)
+
+svyweight_10 <- read.table("customweight_nlsy79_5e71a46df3cdc/customweight_nlsy79_5e71a46df3cdc.dat")
+colnames(svyweight_10) <- c("id","svyweight_10")
+svyweight_10$svyweight_10 <- as.numeric(svyweight_10$svyweight_10)
+data <- merge(data, svyweight_10, by= "id", all.x = T)
+data$income10_per_rank <- percentile_rank(data$income10_per, data$svyweight_10)
+
+# for those 14 yro in 1979, I need year 2000 to 2009 (survey 2002,2004,2006,2008,2010). Note that survey year reflects income in the previous year
+data_14 <- data[data$AGEATINT_1979==14,c("income02_per_rank","income04_per_rank","income06_per_rank","income08_per_rank","income10_per_rank")]
+data_14$adult_income <- rowMeans(data_14, na.rm=T)
+summary(data_14$adult_income)
+
+# for those 15 yro in 1979, I need year 1999 to 2008 (survey 2000,2002,2004,2006,2008)
+data_15 <- data[data$AGEATINT_1979==15,c("income00_per_rank","income02_per_rank","income04_per_rank","income06_per_rank","income08_per_rank")]
+data_15$adult_income <- rowMeans(data_15, na.rm=T)
+
+# for those 16 yro in 1979, I need year 1998 to 2007 (survey 2000,2002,2004,2006,2008)
+data_16 <- data[data$AGEATINT_1979==16,c("income00_per_rank","income02_per_rank","income04_per_rank","income06_per_rank","income08_per_rank")]
+data_16$adult_income <- rowMeans(data_16, na.rm=T)
+
+# for those 17 yro in 1979, I need year 1997 to 2006 (survey 1998,2000,2002,2004,2006)
+data_17 <- data[data$AGEATINT_1979==17,c("income98_per_rank","income00_per_rank","income02_per_rank","income04_per_rank","income06_per_rank")]
+data_17$adult_income <- rowMeans(data_17, na.rm=T)
+
+data$adult_income <- NA
+data$adult_income[data$AGEATINT_1979==14] <- data_14$adult_income
+data$adult_income[data$AGEATINT_1979==15] <- data_15$adult_income
+data$adult_income[data$AGEATINT_1979==16] <- data_16$adult_income
+data$adult_income[data$AGEATINT_1979==17] <- data_17$adult_income
+data$adult_income[is.nan(data$adult_income)] <-NA
+summary(data$adult_income)
+sum(is.nan(data$adult_income))
+
+# alternative measure of income destination: log scale
+data$income98_per_log <- log(data$income98_per+1)
+data$income00_per_log <- log(data$income00_per+1)
+data$income02_per_log <- log(data$income02_per+1)
+data$income04_per_log <- log(data$income04_per+1)
+data$income06_per_log <- log(data$income06_per+1)
+data$income08_per_log <- log(data$income08_per+1)
+data$income10_per_log <- log(data$income10_per+1)
+
+data_14 <- data[data$AGEATINT_1979==14,c("income02_per_log","income04_per_log","income06_per_log","income08_per_log","income10_per_log")]
+data_14$adult_income <- rowMeans(data_14, na.rm=T)
+data_15 <- data[data$AGEATINT_1979==15,c("income00_per_log","income02_per_log","income04_per_log","income06_per_log","income08_per_log")]
+data_15$adult_income <- rowMeans(data_15, na.rm=T)
+data_16 <- data[data$AGEATINT_1979==16,c("income00_per_log","income02_per_log","income04_per_log","income06_per_log","income08_per_log")]
+data_16$adult_income <- rowMeans(data_16, na.rm=T)
+data_17 <- data[data$AGEATINT_1979==17,c("income98_per_log","income00_per_log","income02_per_log","income04_per_log","income06_per_log")]
+data_17$adult_income <- rowMeans(data_17, na.rm=T)
+
+data$adult_income_log <- NA
+data$adult_income_log[data$AGEATINT_1979==14] <- data_14$adult_income
+data$adult_income_log[data$AGEATINT_1979==15] <- data_15$adult_income
+data$adult_income_log[data$AGEATINT_1979==16] <- data_16$adult_income
+data$adult_income_log[data$AGEATINT_1979==17] <- data_17$adult_income
+data$adult_income_log[is.nan(data$adult_income)] <-NA
+summary(data$adult_income_log)
+sum(is.nan(data$adult_income_log))
+
+
+# alternative treatment: health at 40
+table(data$`H40-SF12-2_XRND`, useNA = "always")
+summary(data$`H40-SF12_PCS_SCORE_XRND`)
+summary(data$`H40-SF12_MCS_SCORE_XRND`)
+
+data$health_self <- data$`H40-SF12-2_XRND`
+data$health_physical <- data$`H40-SF12_PCS_SCORE_XRND`
+data$health_mental <- data$`H40-SF12_MCS_SCORE_XRND`
+
+
+# treatment: college degree
+# I use age 30 as the cut-off. The treatment is essentially getting bachelor degree in or before age 30.
+table(data$`Q3-10B_1988`, useNA = "always")
+# survey year 1988: 23 yro to 26 yro
+# survey year 1992: 27 yro to 30 yro
+# survey year 1993: 28 yro to 31 yro
+# survey year 1994: 29 yro to 32 yro
+# survey year 1996: 31 yro to 34 yro
+
+data$college <- NA
+# 1988 is the first year the highest degree item appears
+# from 1988 to 1992, everybody is not older than 30. 
+data$college[data$`Q3-10B_1988`>=3 & data$`Q3-10B_1988`<=7] <- 1 # bachelor degree or above
+data$college[data$`Q3-10B_1988`<=2 | data$`Q3-10B_1988`==8] <- 0 # HS, associate/junior college, or "other"
+data$college[data$`Q3-10B_1989`>=3 & data$`Q3-10B_1989`<=7] <- 1 # bachelor degree or above
+data$college[data$`Q3-10B_1989`<=2 | data$`Q3-10B_1989`==8] <- 0 # HS, associate/junior college, or "other"
+data$college[data$`Q3-10B_1990`>=3 & data$`Q3-10B_1990`<=7] <- 1 # bachelor degree or above
+data$college[data$`Q3-10B_1990`<=2 | data$`Q3-10B_1990`==8] <- 0 # HS, associate/junior college, or "other"
+data$college[data$`Q3-10B_1991`>=3 & data$`Q3-10B_1991`<=7] <- 1 # bachelor degree or above
+data$college[data$`Q3-10B_1991`<=2 | data$`Q3-10B_1991`==8] <- 0 # HS, associate/junior college, or "other"
+data$college[data$`Q3-10B_1992`>=3 & data$`Q3-10B_1992`<=7] <- 1 # bachelor degree or above
+data$college[data$`Q3-10B_1992`<=2 | data$`Q3-10B_1992`==8] <- 0 # HS, associate/junior college, or "other"
+data$college[data$`Q3-10B_1993`>=3 & data$`Q3-10B_1993`<=7 & data$AGEATINT_1979!=17] <- 1 # bachelor degree or above
+data$college[(data$`Q3-10B_1993`<=2 | data$`Q3-10B_1993`==8) & data$AGEATINT_1979!=17] <- 0 # HS, associate/junior college, or "other"
+data$college[data$`Q3-10B_1994`>=3 & data$`Q3-10B_1994`<=7 & (data$AGEATINT_1979==14 | data$AGEATINT_1979==15)] <- 1 # bachelor degree or above
+data$college[(data$`Q3-10B_1994`<=2 | data$`Q3-10B_1994`==8) & (data$AGEATINT_1979==14 | data$AGEATINT_1979==15)] <- 0 # HS, associate/junior college, or "other"
+data$college[data$`Q3-10B_1996`>=3 & data$`Q3-10B_1996`<=7 & data$AGEATINT_1979==14] <- 1 # bachelor degree or above
+data$college[(data$`Q3-10B_1996`<=2 | data$`Q3-10B_1996`==8) & data$AGEATINT_1979==14] <- 0 # HS, associate/junior college, or "other"
+
+data$college <- factor(data$college, levels = c(0,1), labels = c("HS","College"))
+table(data$college, useNA = "always")
+
+
+# gender
+table(data$SAMPLE_SEX_1979)
+data$gender <- NA
+data$gender[data$SAMPLE_SEX_1979==1] <- 0
+data$gender[data$SAMPLE_SEX_1979==2] <- 1
+data$gender <- factor(data$gender, labels = c("Male","Female"))
+table(data$gender, useNA = "always")
+
+# race
+table(data$SAMPLE_RACE_78SCRN)
+data$race <- NA
+data$race[data$SAMPLE_RACE_78SCRN==3] <- 0
+data$race[data$SAMPLE_RACE_78SCRN==2] <- 1
+data$race[data$SAMPLE_RACE_78SCRN==1] <- 2
+data$race <- factor(data$race, labels = c("Other","Black","Hispanic"))
+table(data$race)
+
+# mother's years of schooling
+table(data$`HGC-MOTHER_1979`, useNA = "always")
+data$medu <- data$`HGC-MOTHER_1979`
+
+# father's years of schooling
+table(data$`HGC-FATHER_1979`, useNA = "always")
+data$fedu <- data$`HGC-FATHER_1979`
+
+# father's presence
+# the closest variable I found is: 
+# LIVED WITH BOTH BIOLOGICAL PARENTS FROM BIRTH TO AGE 18?
+table(data$`CRES-1_1988`, useNA = "always")
+data$parental_presence <- data$`CRES-1_1988`
+data$parental_presence <- factor(data$parental_presence, labels = c("No","Yes"))
+
+# number of siblings
+table(data$`FAM-28A_1979`, useNA = "always")
+data$n_sib <- data$`FAM-28A_1979`
+data$n_sib[data$n_sib >=6] <- 6
+data$n_sib <- factor(data$n_sib, labels = c("0","1","2","3","4","5","6_or_more"))
+table(data$n_sib, useNA = "always")
+
+# urban residence
+table(data$`FAM-6_1979`, useNA = "always")
+data$urban <- NA
+data$urban[data$`FAM-6_1979`==2 | data$`FAM-6_1979`==3] <- 0
+data$urban[data$`FAM-6_1979`==1] <- 1
+data$urban <- factor(data$urban, labels = c("No","Yes"))
+table(data$urban, useNA = "always")
+
+# educational expectation
+table(data$`SCHOOL-31_1979`, useNA = "always")
+#hist(data$`SCHOOL-31_1979`)   # a three-category coarsening won't loss much information
+data$edu_exp <- NA
+data$edu_exp[data$`SCHOOL-31_1979`<=11] <- 0 # no HS degree
+data$edu_exp[data$`SCHOOL-31_1979`>=12 & data$`SCHOOL-31_1979`<=15] <- 1  # HS degree but no bachelor
+data$edu_exp[data$`SCHOOL-31_1979`>=16] <- 2  # bachelor degree or higher
+data$edu_exp <- factor(data$edu_exp, labels = c("no_HS_degree","HS_degree_no_bachelor","bachelor_degree_or_higher"))
+table(data$edu_exp, useNA = "always")
+
+# AFQT score
+# note that the test for this is administered in 1980 when the respondents are 15-18. so there's a small risk of having college reversely affects AFQT.
+summary(data$`AFQT-3_1981`)
+# hist(data$`AFQT-3_1981`)
+data$AFQT <- data$`AFQT-3_1981`
+
+# age in 1979
+table(data$AGEATINT_1979, useNA = "always")
+data$age <- as.factor(data$AGEATINT_1979)
+
+# HIGHEST GRADE COMPLETED R'S CLOSEST FRIEND WOULD LIKE
+table(data$`SCHOOL-32_1979`, useNA = "always")
+#hist(data$`SCHOOL-32_1979`)   # a three-category coarsening won't loss much information
+data$friend_edu_exp <- NA
+data$friend_edu_exp[data$`SCHOOL-32_1979`<=11] <- 0 # no HS degree
+data$friend_edu_exp[data$`SCHOOL-32_1979`>=12 & data$`SCHOOL-32_1979`<=15] <- 1  # HS degree but no bachelor
+data$friend_edu_exp[data$`SCHOOL-32_1979`>=16] <- 2  # bachelor degree or higher
+data$friend_edu_exp <- factor(data$friend_edu_exp, labels = c("no_HS_degree","HS_degree_no_bachelor","bachelor_degree_or_higher"))
+table(data$friend_edu_exp, useNA = "always")
+
+# Rotter - Locus of Control Scale Score
+summary(data$ROTTER_SCORE_1979)
+#hist(data$ROTTER_SCORE_1979)
+data$rotter_score <- data$ROTTER_SCORE_1979
+
+# ROSENBERG ESTEEM ITEM RESPONSE SCORE
+summary(data$ROSENBERG_IRT_SCORE_1980)
+data$rosenberg_irt_score <- data$ROSENBERG_IRT_SCORE_1980
+
+#	AT AGE 14, DID ANY HOUSEHOLD MEMBER RECEIVE MAGAZINES REGULARLY?
+table(data$`FAM-13A_1979`, useNA = 'always')
+data$magzine_age14 <- as.factor(data$`FAM-13A_1979`)  
+
+# AT AGE 14, DID ANY HOUSEHOLD MEMBER RECEIVE NEWSPAPERS REGULARLY?
+table(data$`FAM-13B_1979`, useNA = 'always')
+data$newspaper_age14 <- as.factor(data$`FAM-13B_1979`)
+
+# AT AGE 14, DID ANY HOUSEHOLD MEMBER HAVE A LIBRARY CARD?
+table(data$`FAM-13C_1979`, useNA = 'always')
+data$libcard_age14 <- as.factor(data$`FAM-13C_1979`) 
+
+# ATTITUDE OF INFLUENTIAL PERSON TO R'S DECISION TO NOT ATTEND COLLEGE
+table(data$`OTHER-3E`, useNA = 'always')
+# 1 STRONGLY DISAPPROVE; 2 SOMEWHAT DISAPPROVE; 3 SOMEWHAT APPROVE; 4 STRONGLY APPROVE
+data$sig_other_expec <- as.factor(data$`OTHER-3E`)
+
+# WAS FOREIGN LANGUAGE SPOKEN AT HOME DURING R'S CHILDHOOD?
+table(data$`FAM-3`, useNA = 'always')
+data$foreign_lang <- as.factor(data$`FAM-3`)
+table(data$foreign_lang)
+
+# IS R'S CURRENT RESIDENCE IN SMSA?
+table(data$`SMSARES_1979`, useNA = 'always')
+# 0 NOT IN SMSA； 1 SMSA, NOT CENTRAL CITY； 2 SMSA, CENTRAL CITY NOT KNOWN； 3 SMSA, IN CENTRAL CITY
+data$SMSA <- as.factor(data$`SMSARES_1979`)
+table(data$SMSA, data$urban)
+
+# NUMBER OF BOOKS IN SCHOOL LIBRARY - SCHOOL SURVEY (not in Karlson)
+summary(data$`SCHSUR-19_1979`)
+hist(log(data$`SCHSUR-19_1979`))
+data$school_lib <- log(data$`SCHSUR-19_1979`)
+
+# INT CHECK 79 - DO R AND MOTHER/STEPMOTHER LIVE SEPARATELY?
+table(data$`FAM-20_1979`, useNA = 'always')
+data$mother_seperate <- as.factor(data$`FAM-20_1979`)
+
+# ILLEGAL ACTIVITY 80 INT - TIMES SMOKED MARIJUANA/HASHISH IN PAST YEAR
+table(data$`DELIN-12_1980`, useNA = 'always')
+data$marijuana <- as.factor(data$`DELIN-12_1980`)
+class(data$marijuana)
+
+# TYPE OF CURRENT OR LAST SCHOOL CURRICULUM IN GRADES 9-12
+table(data$`SCHOOL-17_1979`, useNA = 'always')
+data$college_prep[data$`SCHOOL-17_1979`==3] <- 1
+data$college_prep[data$`SCHOOL-17_1979`!=3] <- 0
+data$college_prep <- as.factor(data$college_prep)
+table(data$college_prep, useNA = 'always')
+
+# EVER "STOPPED" BY POLICE FOR OTHER THAN MINOR TRAFFIC OFFENSE?
+table(data$`POLICE-1_1980`, useNA = 'always')
+data$police_stop <- as.factor(data$`POLICE-1_1980`)
+
+# ATTITUDE TOWARD CURRENT SCHOOL
+table(data$`SCHOOL-3B_1979`, useNA = 'always')
+data$school_satisfaction <- as.factor(data$`SCHOOL-3B_1979`)
+
+# NUMBER OF SIBLINGS OLDER THAN R
+table(data$`FAM-28C_1979`, useNA = 'always')
+data$n_older_sib <- data$`FAM-28C_1979`
+data$n_older_sib[data$n_older_sib >=6] <- 6
+data$n_older_sib <- factor(data$n_older_sib, labels = c("0","1","2","3","4","5","6_or_more"))
+table(data$n_older_sib, useNA = "always")
+
+# TOTAL NUMBER OF CHILDREN R EXPECTS TO HAVE
+table(data$`FER-3_1979`, useNA = 'always')
+data$n_expec_child <- data$`FER-3_1979`
+data$n_expec_child[data$n_expec_child >=5] <- 5
+data$n_expec_child <- factor(data$n_expec_child, labels = c("0","1","2","3","4","5_or_more"))
+table(data$n_expec_child, useNA = "always")
+
+# COUNTRY OF BIRTH
+table(data$`FAM-2A_1979`, useNA = 'always')
+data$foreign_born <- as.factor(data$`FAM-2A_1979`-1)
+
+# BIRTHPLACE OF R'S FATHER - COUNTRY
+table(data$`FAM-21_1979`, useNA = 'always')
+data$f_foreign_born <- data$`FAM-21_1979`
+data$f_foreign_born[data$f_foreign_born==3] <- NA # never knew father
+data$f_foreign_born <- as.factor(data$f_foreign_born)
+table(data$f_foreign_born, useNA = 'always')
+
+#	BIRTHPLACE OF R'S MOTHER - COUNTRY
+table(data$`FAM-15_1979`, useNA = 'always')
+data$m_foreign_born <- data$`FAM-15_1979`
+data$m_foreign_born[data$m_foreign_born==3] <- NA # never knew mother
+data$m_foreign_born <- as.factor(data$m_foreign_born)
+table(data$m_foreign_born, useNA = 'always')
+
+#	REGION OF CURRENT RESIDENCE
+table(data$REGION_1979, useNA = 'always')
+data$region <- as.factor(data$REGION_1979)
+
+# PERCENTAGE OF STUDENTS CLASSIFIED DISADVANTAGED - SCHOOL SURVEY
+summary(data$`SCHSUR-27_1979`)
+table(data$age, is.na(data$`SCHSUR-27_1979`))
+table(data$region, is.na(data$`SCHSUR-27_1979`)) # these school variables appear having many missing values. But they don't appear to be structual.
+data$school_disadvan_student <- data$`SCHSUR-27_1979`
+
+# PERCENTAGE AVERAGE DAILY ATTENDANCE - SCHOOL SURVEY
+summary(data$`SCHSUR-28_1979`)
+data$school_daily_attendance <- data$`SCHSUR-28_1979`
+
+# PERCENTAGE OF 10TH GRADE STUDENTS WHO DROP OUT - SCHOOL SURVEY
+summary(data$`SCHSUR-29_1979`)
+data$school_dropout <- data$`SCHSUR-29_1979`
+
+# PERCENTAGE OF STUDENTS FEMALE SEX - SCHOOL SURVEY
+summary(data$`SCHSUR-40_1979`)
+data$school_female_student <- data$`SCHSUR-40_1979`
+
+# PERCENTAGE OF FACULTY AND OTHER STAFF FEMALE SEX - SCHOOL SURVEY
+summary(data$`SCHSUR-41_1979`)
+data$school_female_faculty <- data$`SCHSUR-41_1979`
+
+# NUMBER OF FULL-TIME EQUIVALENT COUNSELORS IN SCHOOL - SCHOOL SURVEY
+summary(data$`SCHSUR-42_1979`)
+data$school_n_counselor <- data$`SCHSUR-42_1979`
+
+# NUMBER OF FULL-TIME EQUIVALENT TEACHERS IN SCHOOL - SCHOOL SURVEY
+summary(data$`SCHSUR-43_1979`)
+data$school_n_teacher <- data$`SCHSUR-43_1979`
+
+# PERCENTAGE OF FULL-TIME TEACHERS WITH MASTER'S/DOCTOR'S - SCHOOL SURVEY
+summary(data$`SCHSUR-44_1979`)
+data$school_teacher_degree <- data$`SCHSUR-44_1979`
+
+# PERCENTAGE OF FULL-TIME TEACHERS WHO LEFT SCHOOL - SCHOOL SURVEY
+summary(data$`SCHSUR-45_1979`)
+data$school_teacher_left <- data$`SCHSUR-45_1979`
+
+## For parental occupations, after reviewing various ways occupation status/catogories are coded in sociology, I decide to proceed as follows.
+SEI <- read_table("Census OCC to SEI.txt")
+SEI <- SEI[,1:3]
+# This file maps 1970-basis census occupation codes to a corrected version of SEI score 
+# This mapping file is downloaded from https://www.ssc.wisc.edu/wlsresearch/documentation/appendices/E/memo122c.asc
+
+# DID ADULT FEMALE PRESENT IN HOUSEHOLD AT AGE 14 WORK FOR PAY?
+table(data$`FAM-9_1979`, useNA = "always")
+data$m_work <- as.factor(data$`FAM-9_1979`)
+
+# OCCUPATION OF ADULT FEMALE PRESENT IN HOUSEHOLD AT AGE 14 (CENSUS 3 DIGIT)
+summary(data$`FAM-9A_1979`)
+unique(data$`FAM-9A_1979`)
+
+SEI.m <- SEI
+colnames(SEI.m) <- paste("m_", colnames(SEI.m), sep = "")
+data <- merge(data, SEI.m, by.x = "FAM-9A_1979", by.y = "m_Census_OCC", all.x = T)
+summary(data$m_SEI)
+
+data$`FAM-9A_1979`[!data$`FAM-9A_1979`%in%SEI.m$m_Census_OCC][1] # there is only 1 additional NA, that's because current members of armed forces don't have occupational score
+sum(data$`FAM-9A_1979`==590, na.rm = T)
+
+# DID ADULT MALE PRESENT IN HOUSEHOLD AT AGE 14 WORK FOR PAY?
+table(data$`FAM-11_1979`, useNA = "always")
+data$f_work <- data$`FAM-11_1979`
+
+# OCCUPATION OF ADULT MALE PRESENT IN HOUSEHOLD AT AGE 14 (CENSUS 3 DIGIT)
+summary(data$`FAM-11A_1979`)
+unique(data$`FAM-11A_1979`)
+
+SEI.f <- SEI
+colnames(SEI.f) <- paste("f_", colnames(SEI.f), sep = "")
+data <- merge(data, SEI.f, by.x = "FAM-11A_1979", by.y = "f_Census_OCC", all.x = T)
+summary(data$f_SEI)
+
+data$`FAM-11A_1979`[!data$`FAM-11A_1979`%in%SEI.f$f_Census_OCC][1] # 66 additional NA, that's because current members of armed forces don't have occupational score
+sum(data$`FAM-11A_1979`==590, na.rm = T)
+
+# I can't find "whether a student is enrolled in a college-preparatory curriculum" used by Brand&Xie (2010)
+
+
+## multiple imputation for covariates
+# is it possible? May need to write a function to pool the results in different imputed data ourselves
+# maybe not. Can perhaps use "mice" in package "mice" to impute datasets and then estimate the models in each imputed dataset and finally use "pool" to pool results.
+# library("mice")
+# help(pool, package="mice")
+# library("survey")  maybe use balanced repeat standard error
+
+data_cleaned <- data[,c("id","adult_income","college","parental_income","race","gender",
+                        "medu","fedu","parental_presence",
+                        "n_sib","urban","edu_exp","AFQT","age","friend_edu_exp","rotter_score","rosenberg_irt_score",
+                        "sig_other_expec","school_satisfaction",
+                        "foreign_lang","SMSA","mother_seperate","college_prep",
+                        "f_foreign_born","m_foreign_born","region","m_work")]
+
+# below I deal with variables that have too many missing values
+#nrow(na.omit(data_cleaned))
+#nrow(data_cleaned)
+#colSums(is.na(data_cleaned))
+
+#n <- nrow(data_cleaned[!is.na(data_cleaned$adult_income),])  # N of no missing in Y
+#colSums(is.na(data_cleaned[!is.na(data_cleaned$adult_income),]))
+# only keep variables that have no more than 20% missing values
+#data_cleaned <- data_cleaned[,colSums(is.na(data_cleaned[!is.na(data_cleaned$adult_income),])) < n*0.2]
+# from 57 columns to 44 columns
+# deleted variables are f_SEI, m_SEI, f_work, and all school-level variables.
+#nrow(na.omit(data_cleaned))
+
+
+## custom survey weights
+
+# get the ID of respondents regardless of missing values
+# write.csv(data_cleaned$id, "id.csv", row.names = F)
+# then use the NLSY79 custom weight program to download weight: https://www.nlsinfo.org/weights/nlsy79
+
+#svyweight_overall <- read.table("customweight_nlsy79_5ebdbe61bf7b7/customweight_nlsy79_5ebdbe61bf7b7.dat")
+#colnames(svyweight_overall) <- c("id","weight_all")
+#svyweight_overall$weight_all <- as.numeric(svyweight_overall$weight_all)
+#data_cleaned <- merge(data_cleaned, svyweight_overall, by= "id", all.x = T)
+
+# get the ID of respondents who have no missing values in Y(income)
+write.csv(data_cleaned[!is.na(data_cleaned$adult_income),]$id, "id_no_missing_Y.csv", row.names = F)
+
+svyweight_overall_Y <- read.table("customweight_nlsy79_5e7adad5c9d2d/customweight_nlsy79_5e7adad5c9d2d.dat")
+colnames(svyweight_overall_Y) <- c("id","weight_Y")
+svyweight_overall_Y$weight_Y <- as.numeric(svyweight_overall_Y$weight_Y)
+data_cleaned <- merge(data_cleaned, svyweight_overall_Y, by= "id", all.x = T)
+
+
+save(data_cleaned, file="data_cleaned.RData")
+
+
+load("/Users/Ang/Desktop/Research/Causal_decomposition_empirical_study/Data/data_cleaned.RData")
+
+
+## multiple imputation
+# set up for Amelia
+nom_names <- colnames(data_cleaned[,unlist(lapply(data_cleaned, class))=="factor"])  # nomimal variable names
+idvars_names <- c("id","weight_Y") # do not use id and weight variables for imputation
+sum(data_cleaned$parental_income==1, na.rm = T) # There is one case where parental_income rank=1, which can't be taken by the Amelia argument "lgstc"
+data_cleaned$parental_income[data_cleaned$parental_income==1] <- 0.9999 # recode this case to 0.9999
+
+set.seed(1)
+data_imputed <- amelia(data_cleaned, m=10, noms = nom_names, idvars = idvars_names, lgstc = c("adult_income","parental_income"), parallel="multicore")
+
+# factor variables are specified using the noms argument to maintain only legitimate values
+# adult_income and parental_income are measured by percentile rank, so bounded between 0 and 1. I use a logistic transformation to maintain this feature in the imputed data.
+# Note that now I first get the weighted percentile ranks and then impute missing values in percentile rank scale
+# An alternative is to impute missing values in the original scale and generate weighted percentile ranks.
+# I don't see any strong reason to choose one over the other. 
+# Ranking then imputing can avoid letting incorrectly imputed values impact the rankings of the observed cases.
+# Imputing then ranking can avoid the somewhat awkward logistic transformation needed for imputation.
+
+# the multiple imputation, then deletion (MID) strategy (von Hippel, 2007)
+data_imputed.1 <- data_imputed$imputations[[1]][!is.na(data_cleaned$adult_income),]
+data_imputed.2 <- data_imputed$imputations[[2]][!is.na(data_cleaned$adult_income),]
+data_imputed.3 <- data_imputed$imputations[[3]][!is.na(data_cleaned$adult_income),]
+data_imputed.4 <- data_imputed$imputations[[4]][!is.na(data_cleaned$adult_income),]
+data_imputed.5 <- data_imputed$imputations[[5]][!is.na(data_cleaned$adult_income),]
+data_imputed.6 <- data_imputed$imputations[[6]][!is.na(data_cleaned$adult_income),]
+data_imputed.7 <- data_imputed$imputations[[7]][!is.na(data_cleaned$adult_income),]
+data_imputed.8 <- data_imputed$imputations[[8]][!is.na(data_cleaned$adult_income),]
+data_imputed.9 <- data_imputed$imputations[[9]][!is.na(data_cleaned$adult_income),]
+data_imputed.10 <- data_imputed$imputations[[10]][!is.na(data_cleaned$adult_income),]
+
+sum(is.na(data_cleaned$adult_income))
+sum(is.na(data_imputed.1$adult_income))
+# hist(data_imputed.1$adult_income)
+# hist(data_imputed.1$parental_income)
+
+saveRDS(data_imputed.1, file="data_imputed.1.rds")
+saveRDS(data_imputed.2, file="data_imputed.2.rds")
+saveRDS(data_imputed.3, file="data_imputed.3.rds")
+saveRDS(data_imputed.4, file="data_imputed.4.rds")
+saveRDS(data_imputed.5, file="data_imputed.5.rds")
+saveRDS(data_imputed.6, file="data_imputed.6.rds")
+saveRDS(data_imputed.7, file="data_imputed.7.rds")
+saveRDS(data_imputed.8, file="data_imputed.8.rds")
+saveRDS(data_imputed.9, file="data_imputed.9.rds")
+saveRDS(data_imputed.10, file="data_imputed.10.rds")
