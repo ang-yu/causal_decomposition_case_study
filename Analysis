@@ -15,25 +15,27 @@ download.file("https://raw.githubusercontent.com/ang-yu/caudec/main/caudec.R", d
 source("caudec.R")
 
 #####
-load("/Users/Ang/Desktop/Research/Causal_decomposition/Data/data_cleaned.RData")
+# load("/Users/Ang/Desktop/Research/Causal_decomposition/Data/data_cleaned.RData")
 
-mean(is.na(data_cleaned$adult_income))
-mean(is.na(data_cleaned$college))
-data <- data_cleaned
+# mean(is.na(data_cleaned$adult_income))
+# mean(is.na(data_cleaned$college))
+# data <- data_cleaned
 # data <- data_cleaned[!is.na(data_cleaned$adult_income) & !is.na(data_cleaned$college),]   # drop if missing treatment or outcome 
 
 # proportion of college graduates in each racial-ethnic group
-prop.table(table(data$race, data$college), margin=1)
+# prop.table(table(data$race, data$college), margin=1)
 
 # mean income by race/ethnicity
-aggregate(data$adult_income, list(data$race), FUN=mean)
+# aggregate(data$adult_income, list(data$race), FUN=mean)
 
 # mean income by college
-aggregate(data$adult_income, list(data$college), FUN=mean)
+# aggregate(data$adult_income, list(data$college), FUN=mean)
 #####
 
 
 #### run the analysis in each MI sample 
+start <- Sys.time()
+
 MI_results <- list()
 
 set.seed(1)
@@ -145,41 +147,66 @@ data$pincome_2[data$parental_income>0.25 & !is.na(data$parental_income)] <- 0
 
 #### Analysis
 data <- data[data$pincome_1==1 | data$pincome_2==1, ]
+# data <- data[data$race1==1 | data$race2==1, ]
 
 MI_results[[i]] <- caudec(Y="adult_income",W="college",G1="pincome_1",G2="pincome_2",Q="AFQT",
-                X=c("parental_income","gender","medu","fedu","parental_presence",
-                    "n_sib","urban","edu_exp","AFQT","age","friend_edu_exp","rotter_score","rosenberg_irt_score",
-                    "sig_other_exp1","sig_other_exp2","sig_other_exp3","sig_other_exp4","foreign_lang",
-                    "SMSA1","SMSA2","SMSA3","SMSA4","mother_seperate","college_prep",
-                    "school_satis1","school_satis2","school_satis3","fm_foreign_born",
-                    "region1","region2","region3","region4","m_work","race1","race2","race3"),
-                data=data,k=500,weight="weight_Y")
+                          X=c("parental_income","gender","medu","fedu","parental_presence",
+                              "n_sib","urban","edu_exp","AFQT","age","friend_edu_exp","rotter_score","rosenberg_irt_score",
+                              "sig_other_exp1","sig_other_exp2","sig_other_exp3","sig_other_exp4","foreign_lang",
+                              "SMSA1","SMSA2","SMSA3","SMSA4","mother_seperate","college_prep",
+                              "school_satis1","school_satis2","school_satis3","fm_foreign_born",
+                              "region1","region2","region3","region4","m_work","race1","race2","race3"),
+                          data=data,k=100,t=0.05,algorithm="ranger")
+
+# MI_results[[i]] <- caudec(Y="adult_income",W="college",G1="race1",G2="race2",Q="AFQT",
+#                X=c("parental_income","gender","medu","fedu","parental_presence",
+#                    "n_sib","urban","edu_exp","AFQT","age","friend_edu_exp","rotter_score","rosenberg_irt_score",
+#                    "sig_other_exp1","sig_other_exp2","sig_other_exp3","sig_other_exp4","foreign_lang",
+#                    "SMSA1","SMSA2","SMSA3","SMSA4","mother_seperate","college_prep",
+#                    "school_satis1","school_satis2","school_satis3","fm_foreign_born",
+#                    "region1","region2","region3","region4","m_work","race1","race2"),
+#                data=data,k=500,weight="weight_Y")
+
+# data$gender1 <- 1-data$gender # male
+# data$gender2 <- data$gender   # female
+# MI_results[[i]] <- caudec(Y="adult_income",W="college",G1="gender1",G2="gender2",Q="AFQT",
+#                          X=c("parental_income","gender","medu","fedu","parental_presence",
+#                              "n_sib","urban","edu_exp","AFQT","age","friend_edu_exp","rotter_score","rosenberg_irt_score",
+#                              "sig_other_exp1","sig_other_exp2","sig_other_exp3","sig_other_exp4","foreign_lang",
+#                              "SMSA1","SMSA2","SMSA3","SMSA4","mother_seperate","college_prep",
+#                             "school_satis1","school_satis2","school_satis3","fm_foreign_born",
+#                              "region1","region2","region3","region4","m_work","race1","race2","race3"),
+#                          data=data,k=500,weight="weight_Y")
 
 }
+
+end <- Sys.time()
+end-start
+
+save(MI_results, file="MI_results_nnet.RData")
+save(MI_results, file="MI_results_ranger.RData")
 
 #### pooling MI results (Rubin, 1987, p76-7)
 m <- 10
 
-### underlying components
-### decomposition results
 # averages
-averages_underling <- rep(0, nrow(MI_results[[1]]$underlying))
+averages <- rep(0, length(MI_results[[1]][[1]]))
 for (i in 1:m) {
-  averages_underling <- (averages_underling + MI_results[[i]]$underlying$average)
+  averages <- (averages + MI_results[[i]][[1]])
 }
-averages_underling <- averages_underling/m
+averages <- averages/m
 
 # se
 # se within is the average of se's in MI samples
-var_within <- rep(0, nrow(MI_results[[1]]$underlying))
+var_within <- rep(0, length(MI_results[[1]][[1]]))
 for (i in 1:m) {
-  var_within <- (var_within + MI_results[[i]]$underlying$se^2)   # the se given by caudec should be squared to get estimates' variances
+  var_within <- (var_within + MI_results[[i]][[2]]^2)   # the se given by caudec should be squared to get estimates' variances
 }
 var_within <- var_within/m
 # se between
-var_between <- rep(0, nrow(MI_results[[1]]$underlying))
+var_between <- rep(0, length(MI_results[[1]][[1]]))
 for (i in 1:m) {
-  var_between <- var_between + (averages_underling-MI_results[[i]]$underlying$averag)^2
+  var_between <- var_between + (averages-MI_results[[i]][[1]])^2
 }
 var_between <- var_between/(m-1)
 var_total <- var_within+(1+1/m)*var_between
@@ -192,64 +219,11 @@ qt(0.975, dof)
 # And that is because var_within/var_between is particularly small for prevalence and conditional prevalence
 
 # confidence intervals
-CI_low_underlying <- averages_underling - qt(0.975, dof)*sqrt(var_total)
-CI_upp_underlying <- averages_underling + qt(0.975, dof)*sqrt(var_total)
+CI_low <- averages - qt(0.975, dof)*sqrt(var_total)
+CI_upp <- averages + qt(0.975, dof)*sqrt(var_total)
 
-
-### decomposition results
-# averages
-averages_decomp <- rep(0, 6)
-for (i in 1:m) {
-  averages_decomp <- (averages_decomp + MI_results[[i]]$decomp$average)
-}
-averages_decomp <- averages_decomp/m
-
-# se
-# se within is the average of se's in MI samples
-var_within <- rep(0, 6)
-for (i in 1:m) {
-  var_within <- (var_within + MI_results[[i]]$decomp$se^2)   # the se given by caudec should be squared to get estimates' variances
-}
-var_within <- var_within/m
-# se between
-var_between <- rep(0, 6)
-for (i in 1:m) {
-  var_between <- var_between + (averages_decomp-MI_results[[i]]$decomp$averag)^2
-}
-var_between <- var_between/(m-1)
-var_total <- var_within+(1+1/m)*var_between
-
-# degrees of freedom
-dof <- (m-1)*(1 + var_within/( (1+1/m)*var_between) )^2
-
-qt(0.975, dof)   
-# (100-1)*(1 + var_within/( (1+1/100)*var_between) )^2  # making m=100 will particularly improve the results for prevalence and conditional prevalence
-# And that is because var_within/var_between is particularly small for prevalence and conditional prevalence
-
-# confidence intervals
-CI_low_decomp <- averages_decomp - qt(0.975, dof)*sqrt(var_total)
-CI_upp_decomp <- averages_decomp + qt(0.975, dof)*sqrt(var_total)
-
-final_underlying <- as.data.frame(cbind(
-  averages_underling,
-  CI_low_underlying,
-  CI_upp_underlying))
-row.names(final_underlying) <- row.names(MI_results[[1]]$underlying)
-
-final_decomp <- as.data.frame(cbind(
-  averages_decomp,
-  CI_low_decomp,
-  CI_upp_decomp))
-row.names(final_decomp) <- row.names(MI_results[[1]]$decomp)
-
-# format(round(final_decomp, 3), nsmall = 3)
-
-tab <- xtable(final_underlying, caption= "Estimates for Underlying Components", digits=3, align=c("l","r","r","r"))
-print(tab, caption.placement="top", hline.after=c(-1,0,10))
-
-tab <- xtable(final_decomp, caption= "Decomposition Estimates", digits=3, align=c("l","r","r","r"))
-print(tab, caption.placement="top", hline.after=c(-1,0,6))
-
+# p values
+1-abs(pt(averages/sqrt(var_total), df=dof)-0.5)*2
 
 
 
@@ -270,7 +244,8 @@ X <- c("parental_income","gender","medu","fedu","parental_presence",
 
 k <- 10
 alpha <-0.05
+t <- 0.05
 weight="weight_Y"
-
-
+data <- data
+algorithm <- "ranger"
 
