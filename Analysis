@@ -183,8 +183,11 @@ MI_results[[i]] <- caudec(Y="adult_income",W="college",G1="pincome_1",G2="pincom
 end <- Sys.time()
 end-start
 
-save(MI_results, file="MI_results_nnet.RData")
-save(MI_results, file="MI_results_ranger.RData")
+# save(MI_results, file="MI_results_nnet.RData")
+# save(MI_results, file="MI_results_ranger.RData")
+
+# load("MI_results_nnet.RData")
+load("MI_results_ranger.RData")
 
 #### pooling MI results (Rubin, 1987, p76-7)
 m <- 10
@@ -223,10 +226,39 @@ CI_low <- averages - qt(0.975, dof)*sqrt(var_total)
 CI_upp <- averages + qt(0.975, dof)*sqrt(var_total)
 
 # p values
-1-abs(pt(averages/sqrt(var_total), df=dof)-0.5)*2
+pvalues <- 1-abs(pt(averages/sqrt(var_total), df=dof)-0.5)*2
 
 
+results_df <- as.data.frame(cbind(c(
+  "mean(data[,Y][G1_index]*wht[G1_index])",
+  "mean(data[,Y][G2_index]*wht[G2_index])",
+  "mean(Y0_i[G1_index])",
+  "mean(Y0_i[G2_index])",
+  "mean(data[,W][G1_index]*wht[G1_index])",
+  "mean(data[,W][G2_index]*wht[G2_index])",
+  "mean(ATE_i[G1_index])",
+  "mean(ATE_i[G2_index])",
+  "mean(ATT_i[G1_index])",
+  "mean(ATT_i[G2_index])",
+  "total",
+  "baseline",
+  "mean(data[,W][G1_index]*wht[G1_index])-mean(data[,W][G2_index]*wht[G2_index])",
+  "mean(ATE_i[G1_index])-mean(ATE_i[G2_index])",
+  "mean(ATT_i[G1_index])-mean(ATT_i[G2_index])",
+  "total",
+  "baseline",
+  "prevalence",
+  "effect",
+  "selection",
+  "cond_prevalence",
+  "cond_effect",
+  "cond_selection",
+  "Q_dist"
+),
+averages,
+pvalues))
 
+# View(results_df)
 
 
 Y <- "adult_income"
