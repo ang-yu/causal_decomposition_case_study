@@ -156,7 +156,7 @@ MI_results[[i]] <- caudec(Y="adult_income",W="college",G1="pincome_1",G2="pincom
                               "SMSA1","SMSA2","SMSA3","SMSA4","mother_seperate","college_prep",
                               "school_satis1","school_satis2","school_satis3","fm_foreign_born",
                               "region1","region2","region3","region4","m_work","race1","race2","race3"),
-                          data=data,k=100,t=0.05,algorithm="ranger")
+                          data=data,k=100,t=0.05,algorithm="ranger",weight="weight_Y")
 
 # MI_results[[i]] <- caudec(Y="adult_income",W="college",G1="race1",G2="race2",Q="AFQT",
 #                X=c("parental_income","gender","medu","fedu","parental_presence",
@@ -185,9 +185,10 @@ end-start
 
 # save(MI_results, file="MI_results_nnet.RData")
 # save(MI_results, file="MI_results_ranger.RData")
+save(MI_results, file="MI_results_ranger_weighted.RData")
 
 # load("MI_results_nnet.RData")
-load("MI_results_ranger.RData")
+load("MI_results_ranger_weighted.RData")
 
 #### pooling MI results (Rubin, 1987, p76-7)
 m <- 10
@@ -259,25 +260,4 @@ averages,
 pvalues))
 
 # View(results_df)
-
-
-Y <- "adult_income"
-W <- "college"
-G1 <- "pincome_1"
-G2 <- "pincome_2"
-Q <- "AFQT"
-
-X <- c("parental_income","gender","medu","fedu","parental_presence",
-       "n_sib","urban","edu_exp","AFQT","age","friend_edu_exp","rotter_score","rosenberg_irt_score",
-       "sig_other_exp1","sig_other_exp2","sig_other_exp3","sig_other_exp4","foreign_lang",
-       "SMSA1","SMSA2","SMSA3","SMSA4","mother_seperate","college_prep",
-       "school_satis1","school_satis2","school_satis3","fm_foreign_born",
-       "region1","region2","region3","region4","m_work","race1","race2","race3") 
-
-k <- 10
-alpha <-0.05
-t <- 0.05
-weight="weight_Y"
-data <- data
-algorithm <- "ranger"
 
