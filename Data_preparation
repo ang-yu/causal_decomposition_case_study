@@ -1,0 +1,236 @@
+
+rm(list=ls(all=TRUE))
+library("dplyr")
+
+setwd("/Users/Ang/Desktop/Research/Causal_decomposition/Data")
+
+load("data.RData")
+colnames(data)
+
+table(data$AGEATINT_1979)
+data <- data[data$AGEATINT_1979<=17,]   # 12686 to 5650
+# We restrict the sample to age 14-17 in 1979. Zhou uses 14-18. Karlson uses 14-16.
+
+# divide family income by the square root of family size (following Zhou)
+data$income79_per <- data$TNFI_TRUNC_1979/sqrt(data$FAMSIZE_1979)
+data$income80_per <- data$TNFI_TRUNC_1980/sqrt(data$FAMSIZE_1980)
+data$income81_per <- data$TNFI_TRUNC_1981/sqrt(data$FAMSIZE_1981)
+data$income82_per <- data$TNFI_TRUNC_1982/sqrt(data$FAMSIZE_1982)
+data$income83_per <- data$TNFI_TRUNC_1983/sqrt(data$FAMSIZE_1983)
+data$income84_per <- data$TNFI_TRUNC_1984/sqrt(data$FAMSIZE_1984)
+
+data$income06_per <- data$TNFI_TRUNC_2006/sqrt(data$FAMSIZE_2006)
+data$income08_per <- data$TNFI_TRUNC_2008/sqrt(data$FAMSIZE_2008)
+data$income10_per <- data$TNFI_TRUNC_2010/sqrt(data$FAMSIZE_2010)
+data$income12_per <- data$TNFI_TRUNC_2012/sqrt(data$FAMSIZE_2012)
+data$income14_per <- data$TNFI_TRUNC_2014/sqrt(data$FAMSIZE_2014)
+data$income16_per <- data$TNFI_TRUNC_2016/sqrt(data$FAMSIZE_2016)
+data$income18_per <- data$TNFI_TRUNC_2018/sqrt(data$FAMSIZE_2018)
+
+# get percentile rank
+data$income79_per_rank <- percent_rank(data$income79_per)
+data$income80_per_rank <- percent_rank(data$income80_per)
+data$income81_per_rank <- percent_rank(data$income81_per)
+data$income82_per_rank <- percent_rank(data$income82_per)
+data$income83_per_rank <- percent_rank(data$income83_per)
+data$income84_per_rank <- percent_rank(data$income84_per)
+
+data$income06_per_rank <- percent_rank(data$income06_per)
+data$income08_per_rank <- percent_rank(data$income08_per)
+data$income10_per_rank <- percent_rank(data$income10_per)
+data$income12_per_rank <- percent_rank(data$income12_per)
+data$income14_per_rank <- percent_rank(data$income14_per)
+data$income16_per_rank <- percent_rank(data$income16_per)
+data$income18_per_rank <- percent_rank(data$income18_per)
+
+## parental income measures
+# For 17 year olds in 1979, we use data from 1979, 1980, 1981 to capture family income at age 16, 17, 18
+# For 16 year olds in 1979, we use data from 1980, 1981, 1982 to capture family income at age 16, 17, 18
+# For 15 year olds in 1979, we use data from 1981, 1982, 1983 to capture family income at age 16, 17, 18
+# For 14 year olds in 1979, we use data from 1982, 1983, 1984 to capture family income at age 16, 17, 18
+data$parental_income_rank <- NA
+data$parental_income_rank[data$AGEATINT_1979==17] <- rowMeans(data[data$AGEATINT_1979==17,c("income79_per_rank","income80_per_rank","income81_per_rank")], na.rm = T)
+data$parental_income_rank[data$AGEATINT_1979==16] <- rowMeans(data[data$AGEATINT_1979==16,c("income80_per_rank","income81_per_rank","income82_per_rank")], na.rm = T)
+data$parental_income_rank[data$AGEATINT_1979==15] <- rowMeans(data[data$AGEATINT_1979==15,c("income81_per_rank","income82_per_rank","income83_per_rank")], na.rm = T)
+data$parental_income_rank[data$AGEATINT_1979==14] <- rowMeans(data[data$AGEATINT_1979==14,c("income82_per_rank","income83_per_rank","income84_per_rank")], na.rm = T)
+data$parental_income_rank[is.nan(data$parental_income_rank)] <- NA # recode NaN to NA. Nothing worrisome.
+summary(data$parental_income_rank)
+
+## income destination measures
+# We focus on family income from age 44 to age 53. Note that survey year reflects income in the previous year
+# For 17 year olds in 1979, we use data from 2008, 2010, 2012, 2014, 2016 to capture family income at age 45, 47, 49, 51, 53.
+# For 16 year olds in 1979, we use data from 2008, 2010, 2012, 2014, 2016 to capture family income at age 44, 46, 48, 50, 52.
+# For 15 year olds in 1979, we use data from 2010, 2012, 2014, 2016, 2018 to capture family income at age 45, 47, 49, 51, 53.
+# For 14 year olds in 1979, we use data from 2010, 2012, 2014, 2016, 2018 to capture family income at age 44, 46, 48, 50, 52.
+data$adult_income_rank <- NA
+data$adult_income_rank[data$AGEATINT_1979==17] <- rowMeans(data[data$AGEATINT_1979==17,c("income06_per_rank","income08_per_rank","income10_per_rank","income12_per_rank","income14_per_rank")], na.rm = T)
+data$adult_income_rank[data$AGEATINT_1979==16] <- rowMeans(data[data$AGEATINT_1979==16,c("income06_per_rank","income08_per_rank","income10_per_rank","income12_per_rank","income14_per_rank")], na.rm = T)
+data$adult_income_rank[data$AGEATINT_1979==15] <- rowMeans(data[data$AGEATINT_1979==15,c("income08_per_rank","income10_per_rank","income12_per_rank","income14_per_rank","income16_per_rank")], na.rm = T)
+data$adult_income_rank[data$AGEATINT_1979==14] <- rowMeans(data[data$AGEATINT_1979==14,c("income08_per_rank","income10_per_rank","income12_per_rank","income14_per_rank","income16_per_rank")], na.rm = T)
+data$adult_income_rank[is.nan(data$adult_income_rank)] <- NA # recode NaN to NA. Nothing worrisome.
+summary(data$adult_income_rank)
+cor.test(data$parental_income_rank, data$adult_income_rank)
+
+# College completion
+# We use age 29 as the cut-off. The treatment is essentially getting bachelor degree in or before age 28.
+# 1988 is the first year educational attainment is measured.
+# For the 14 year olds in 1979, we use data from 1988, 1989, 1990, 1991, 1992, 1993, 1994.
+# For the 15 year olds in 1979, we use data from 1988, 1989, 1990, 1991, 1992, 1993.
+# For the 16 year olds in 1979, we use data from 1988, 1989, 1990, 1991, 1992.
+# For the 17 year olds in 1979, we use data from 1988, 1989, 1990, 1991.
+# Q3-10B variables >=3 & <=7: bachelor degree or above; Q3-10B <=2 | ==8: HS, associate/junior college, or "other"
+data$completion <- NA
+data$completion[data$`Q3-10B_1988`>=3 & data$`Q3-10B_1988`<=7] <- 1
+data$completion[data$`Q3-10B_1988`<=2 | data$`Q3-10B_1988`==8] <- 0
+data$completion[data$`Q3-10B_1989`>=3 & data$`Q3-10B_1989`<=7] <- 1
+data$completion[data$`Q3-10B_1989`<=2 | data$`Q3-10B_1989`==8] <- 0
+data$completion[data$`Q3-10B_1990`>=3 & data$`Q3-10B_1990`<=7] <- 1
+data$completion[data$`Q3-10B_1990`<=2 | data$`Q3-10B_1990`==8] <- 0
+data$completion[data$`Q3-10B_1991`>=3 & data$`Q3-10B_1991`<=7] <- 1
+data$completion[data$`Q3-10B_1991`<=2 | data$`Q3-10B_1991`==8] <- 0
+data$completion[data$`Q3-10B_1992`>=3 & data$`Q3-10B_1992`<=7 & (data$AGEATINT_1979==14 | data$AGEATINT_1979==15 | data$AGEATINT_1979==16)] <- 1
+data$completion[(data$`Q3-10B_1992`<=2 | data$`Q3-10B_1992`==8) & (data$AGEATINT_1979==14 | data$AGEATINT_1979==15 | data$AGEATINT_1979==16)] <- 0
+data$completion[data$`Q3-10B_1993`>=3 & data$`Q3-10B_1993`<=7 & (data$AGEATINT_1979==14 | data$AGEATINT_1979==15)] <- 1
+data$completion[(data$`Q3-10B_1993`<=2 | data$`Q3-10B_1993`==8) & (data$AGEATINT_1979==14 | data$AGEATINT_1979==15)] <- 0
+data$completion[data$`Q3-10B_1994`>=3 & data$`Q3-10B_1994`<=7 & (data$AGEATINT_1979==14)] <- 1
+data$completion[(data$`Q3-10B_1994`<=2 | data$`Q3-10B_1994`==8) & (data$AGEATINT_1979==14)] <- 0
+data$completion <- factor(data$completion, levels = c(0,1), labels = c("no","yes"))
+table(data$completion, useNA = "always")
+## Note that the completion variable is NA if the respondent hasn't graduated from high school
+
+# high school graduation status at age 29
+# It is sufficient to focus on the final year in the period instead of all years from 1979. 
+data$HS29 <- NA
+data$HS29[data$AGEATINT_1979==17&(data$ENROLLMTREV91_1991==3|data$ENROLLMTREV91_1991==4)] <- 1  # enrolled in college | not enrolled, high school graduate
+data$HS29[data$AGEATINT_1979==17&(data$ENROLLMTREV91_1991==1|data$ENROLLMTREV91_1991==2)] <- 0  # not enrolled, completed less than 12th grade | enrolled in high school
+data$HS29[data$AGEATINT_1979==16&(data$ENROLLMTREV92_1992==3|data$ENROLLMTREV92_1992==4)] <- 1
+data$HS29[data$AGEATINT_1979==16&(data$ENROLLMTREV92_1992==1|data$ENROLLMTREV92_1992==2)] <- 0
+data$HS29[data$AGEATINT_1979==15&(data$ENROLLMTREV93_1993==3|data$ENROLLMTREV93_1993==4)] <- 1
+data$HS29[data$AGEATINT_1979==15&(data$ENROLLMTREV93_1993==1|data$ENROLLMTREV93_1993==2)] <- 0
+data$HS29[data$AGEATINT_1979==14&(data$ENROLLMTREV94_1994==3|data$ENROLLMTREV94_1994==4)] <- 1
+data$HS29[data$AGEATINT_1979==14&(data$ENROLLMTREV94_1994==1|data$ENROLLMTREV94_1994==2)] <- 0
+table(data$HS29, useNA="always")
+table(data$HS29, data$completion, useNA="always")
+data$HS29[!is.na(data$completion)] <- 1  # if completion is not NA, then high school graduation is established with data from some previous year.
+
+data$completion[data$HS29==0] <- "no"  # if HS29=0, college completion must be 0
+
+
+# gender
+table(data$SAMPLE_SEX_1979)
+data$gender <- NA
+data$gender[data$SAMPLE_SEX_1979==1] <- 0
+data$gender[data$SAMPLE_SEX_1979==2] <- 1
+data$gender <- factor(data$gender, labels = c("Male","Female"))
+table(data$gender, useNA = "always")
+
+# race
+table(data$SAMPLE_RACE_78SCRN)
+data$race <- NA
+data$race[data$SAMPLE_RACE_78SCRN==3] <- 0
+data$race[data$SAMPLE_RACE_78SCRN==2] <- 1
+data$race[data$SAMPLE_RACE_78SCRN==1] <- 2
+data$race <- factor(data$race, labels = c("Other","Black","Hispanic"))
+table(data$race)
+
+# mother's years of schooling
+table(data$`HGC-MOTHER_1979`, useNA = "always")
+data$medu <- data$`HGC-MOTHER_1979`
+
+# father's presence
+# the closest variable I found is:
+# LIVED WITH BOTH BIOLOGICAL PARENTS FROM BIRTH TO AGE 18?
+table(data$`CRES-1_1988`, useNA = "always")
+data$parental_presence <- data$`CRES-1_1988`
+data$parental_presence <- factor(data$parental_presence, labels = c("No","Yes"))
+
+# number of siblings
+table(data$`FAM-28A_1979`, useNA = "always")
+data$n_sib <- data$`FAM-28A_1979`
+data$n_sib[data$n_sib >=6] <- 6
+data$n_sib <- factor(data$n_sib, labels = c("0","1","2","3","4","5","6_or_more"))
+table(data$n_sib, useNA = "always")
+
+# urban residence
+table(data$`FAM-6_1979`, useNA = "always")
+data$urban <- NA
+data$urban[data$`FAM-6_1979`==2 | data$`FAM-6_1979`==3] <- 0
+data$urban[data$`FAM-6_1979`==1] <- 1
+data$urban <- factor(data$urban, labels = c("No","Yes"))
+table(data$urban, useNA = "always")
+
+# educational expectation
+table(data$`SCHOOL-31_1979`, useNA = "always")
+#hist(data$`SCHOOL-31_1979`)   # a three-category coarsening won't loss much information
+data$edu_exp <- NA
+data$edu_exp[data$`SCHOOL-31_1979`<=11] <- 0 # no HS degree
+data$edu_exp[data$`SCHOOL-31_1979`>=12 & data$`SCHOOL-31_1979`<=15] <- 1  # HS degree but no bachelor
+data$edu_exp[data$`SCHOOL-31_1979`>=16] <- 2  # bachelor degree or higher
+data$edu_exp <- factor(data$edu_exp, labels = c("no_HS_degree","HS_degree_no_bachelor","bachelor_degree_or_higher"))
+table(data$edu_exp, useNA = "always")
+
+# AFQT score
+# note that the test for this is administered in 1980 when the respondents are 15-18. so there's a small risk of having college reversely affects AFQT.
+summary(data$`AFQT-3_1981`)
+# hist(data$`AFQT-3_1981`)
+data$AFQT <- data$`AFQT-3_1981`
+
+# age in 1979
+table(data$AGEATINT_1979, useNA = "always")
+data$age <- as.factor(data$AGEATINT_1979)
+
+# HIGHEST GRADE COMPLETED R'S CLOSEST FRIEND WOULD LIKE
+table(data$`SCHOOL-32_1979`, useNA = "always")
+#hist(data$`SCHOOL-32_1979`)   # a three-category coarsening won't loss much information
+data$friend_edu_exp <- NA
+data$friend_edu_exp[data$`SCHOOL-32_1979`<=11] <- 0 # no HS degree
+data$friend_edu_exp[data$`SCHOOL-32_1979`>=12 & data$`SCHOOL-32_1979`<=15] <- 1  # HS degree but no bachelor
+data$friend_edu_exp[data$`SCHOOL-32_1979`>=16] <- 2  # bachelor degree or higher
+data$friend_edu_exp <- factor(data$friend_edu_exp, labels = c("no_HS_degree","HS_degree_no_bachelor","bachelor_degree_or_higher"))
+table(data$friend_edu_exp, useNA = "always")
+
+# Rotter - Locus of Control Scale Score
+summary(data$ROTTER_SCORE_1979)
+#hist(data$ROTTER_SCORE_1979)
+data$rotter_score <- data$ROTTER_SCORE_1979
+
+# ROSENBERG ESTEEM ITEM RESPONSE SCORE
+summary(data$ROSENBERG_IRT_SCORE_1980)
+data$rosenberg_irt_score <- data$ROSENBERG_IRT_SCORE_1980
+
+# WAS FOREIGN LANGUAGE SPOKEN AT HOME DURING R'S CHILDHOOD?
+table(data$`FAM-3`, useNA = 'always')
+data$foreign_lang <- as.factor(data$`FAM-3`)
+table(data$foreign_lang)
+
+# IS R'S CURRENT RESIDENCE IN SMSA?
+table(data$`SMSARES_1979`, useNA = 'always')
+# 0 NOT IN SMSA； 1 SMSA, NOT CENTRAL CITY； 2 SMSA, CENTRAL CITY NOT KNOWN； 3 SMSA, IN CENTRAL CITY
+data$SMSA <- as.factor(data$`SMSARES_1979`)
+table(data$SMSA, data$urban)
+
+# INT CHECK 79 - DO R AND MOTHER/STEPMOTHER LIVE SEPARATELY?
+table(data$`FAM-20_1979`, useNA = 'always')
+data$mother_seperate <- as.factor(data$`FAM-20_1979`)
+
+# ATTITUDE TOWARD CURRENT SCHOOL
+table(data$`SCHOOL-3B_1979`, useNA = 'always')
+data$school_satisfaction <- as.factor(data$`SCHOOL-3B_1979`)
+
+#	REGION OF CURRENT RESIDENCE
+table(data$REGION_1979, useNA = 'always')
+data$region <- as.factor(data$REGION_1979)
+
+# DID ADULT FEMALE PRESENT IN HOUSEHOLD AT AGE 14 WORK FOR PAY?
+table(data$`FAM-9_1979`, useNA = "always")
+data$m_work <- as.factor(data$`FAM-9_1979`)
+
+
+data <- data[!is.na(data$HS29),]
+data <- data[data$HS29==1,]
+data <- data[,c("adult_income_rank","completion","parental_income_rank","race","gender",
+                                "medu","parental_presence","n_sib","urban","edu_exp","AFQT","age","friend_edu_exp",
+                                "rotter_score","rosenberg_irt_score","school_satisfaction","foreign_lang",
+                                "SMSA","mother_seperate","region","m_work")]
+
+saveRDS(data, file="data_cleaned.rds")
