@@ -102,18 +102,18 @@ covariates <- c("AFQT","gender","medu","parental_presence","n_sib","urban","edu_
 ##### Unconditional decomposition
 # The Q variable should be listed first to ensure consistency with conditional decomposition
 result_pa <- cdgd0_pa(Y="adult_income_rank",D="completion",G="pincome_1",
-                    X=covariates,
-                    data=data)
+                      X=covariates,
+                      data=data)
 
 set.seed(1)
 result_gbm <- cdgd0_ml(Y="adult_income_rank",D="completion",G="pincome_1",
-      X=covariates,
-      data=data,algorithm="gbm")
+                       X=covariates,
+                       data=data,algorithm="gbm")
 
 set.seed(1)
 result_nnet <- cdgd0_ml(Y="adult_income_rank",D="completion",G="pincome_1",
-                    X=covariates,
-                    data=data,algorithm="nnet")
+                        X=covariates,
+                        data=data,algorithm="nnet")
 
 #set.seed(1)
 #result_ranger <- cdgd0_ml(Y="adult_income_rank",D="completion",G="pincome_1",
@@ -208,18 +208,18 @@ ggsave(paste("/Users/Ang/Desktop/Research/Causal_decomposition/unconditional_",S
 
 ##### Conditional decomposition
 cond_result_pa <- cdgd1_pa(Y="adult_income_rank",D="completion",G="pincome_1",Q="AFQT",
-                         X=covariates[!covariates%in%"AFQT"],
-                         data=data)
+                           X=covariates[!covariates%in%"AFQT"],
+                           data=data)
 
 set.seed(1)
 cond_result_gbm <- cdgd1_ml(Y="adult_income_rank",D="completion",G="pincome_1",Q="AFQT",
-                    X=covariates[!covariates%in%"AFQT"],
-                    data=data,algorithm="gbm")
+                            X=covariates[!covariates%in%"AFQT"],
+                            data=data,algorithm="gbm")
 
 set.seed(1)
 cond_result_nnet <- cdgd1_ml(Y="adult_income_rank",D="completion",G="pincome_1",Q="AFQT",
-                     X=covariates[!covariates%in%"AFQT"],
-                     data=data,algorithm="nnet")
+                             X=covariates[!covariates%in%"AFQT"],
+                             data=data,algorithm="nnet")
 
 # Since the default setting for ranger produces exact 0's and 1's in the denominator of the weight, we use a set of tailored hyperparameters for ranger
 
@@ -362,8 +362,8 @@ message <- utils::capture.output( GgivenQ.Model.sample2 <- caret::train(stats::a
 data[,G] <- as.numeric(data[,G])-1
 
 GgivenQ.Pred <- rep(NA, nrow(data))
-GgivenQ.Pred[sample2] <- stats::predict(DgivenGQ.Model.sample1, newdata = data[sample2,], type="prob")[,2]
-GgivenQ.Pred[sample1] <- stats::predict(DgivenGQ.Model.sample2, newdata = data[sample1,], type="prob")[,2]
+GgivenQ.Pred[sample2] <- stats::predict(GgivenQ.Model.sample1, newdata = data[sample2,], type="prob")[,2]
+GgivenQ.Pred[sample1] <- stats::predict(GgivenQ.Model.sample2, newdata = data[sample1,], type="prob")[,2]
 
 cond_result_ranger <- cdgd1_manual(Y=Y,D=D,G=G,
                                    YgivenGXQ.Pred_D0=YgivenGXQ.Pred_D0,
@@ -413,7 +413,7 @@ irl <- function(x,y,z) {
   c(interleave(rd(x), paste("(", paste(rd(y), rd(z), sep=", "), ")", sep="")))
 }
 
-### Table A2.
+### Table A3
 tableA2 <- cbind(c("Total","","Baseline","","Prevalence","","Effect","","Selection","","Jackson reduction",""),
                  rbind(cbind(irl(result_gbm$results$point,result_gbm$results$CI_lower,result_gbm$results$CI_upper),
                              irl(result_nnet$results$point,result_nnet$results$CI_lower,result_nnet$results$CI_upper),
@@ -428,7 +428,7 @@ xtable(tableA2)
 
 # Instruction to ChatGPT: Please remove the first column and the spaces between parentheses and numbers from this latex table
 
-### Table A3
+### Table A4
 tableA3 <- cbind(c("Total","","Baseline","","Conditional prevalence","","Conditional effect","","Conditional selection","","Q distribution","","Conditional Jackson reduction",""),
                  irl(cond_result_gbm$point,cond_result_gbm$CI_lower,cond_result_gbm$CI_upper),
                  irl(cond_result_nnet$point,cond_result_nnet$CI_lower,cond_result_nnet$CI_upper),
@@ -441,8 +441,9 @@ cbind(cond_result_gbm[,c("point","p_value")],
       cond_result_ranger[,c("point","p_value")],
       cond_result_pa[,c("point","p_value")])
 
-### Table A.1
+### Table A.2
 rd(result_gbm$results_specific[3:12,c("point","CI_lower","CI_upper")])
 rd(result_nnet$results_specific[3:12,c("point","CI_lower","CI_upper")])
 rd(result_ranger$results_specific[3:12,c("point","CI_lower","CI_upper")])
 rd(result_pa$results_specific[3:12,c("point","CI_lower","CI_upper")])
+
