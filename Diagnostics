@@ -335,7 +335,8 @@ mse_ranger <- mean((data$adult_income_rank - Ypred)^2)
 ##### pool the results together
 grid.arrange(p_score_para, p_score_nnet, p_score_gbm, p_score_ranger, ncol = 2)
 
-c(mse_para, mse_gbm, mse_nnet, mse_ranger)
+mse_intercept <- mean((data$adult_income_rank - mean(data$adult_income_rank))^2)
+c(mse_intercept, mse_para, mse_nnet, mse_gbm, mse_ranger)
 
 
 ## get the balance when no weighted is used
@@ -366,3 +367,4 @@ ggplot(data_balance, aes(x = value, y = variable, shape = model, color = model))
   theme(axis.text.y = element_text(size = 12)) +
   geom_vline(xintercept = 20, linetype = "solid", color = "black") +
   guides(shape = guide_legend(title = ""), color = guide_legend(title = "")) 
+
