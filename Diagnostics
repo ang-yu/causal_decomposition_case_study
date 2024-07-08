@@ -6,6 +6,7 @@ library("ranger")
 library("gdata")
 library("xtable")
 library("ggplot2")
+library("gridExtra")
 
 library("cdgd")
 
@@ -143,7 +144,7 @@ YgivenGX.Pred_D1 <- stats::predict(YgivenDGX.Model, newdata = pred_data)
 ### Diagnostics 
 # covariate overlap
 p_score_para <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
-  geom_histogram(bins=100) +
+  geom_histogram(bins=50) +
   labs(title = "(a) Parametric model", x = "Propensity score", y = "Frequency")
 
 # covariate balance after weighting
@@ -152,3 +153,216 @@ balance_para <- sapply(c(G,X), ASD)
 # outcome model fit
 Ypred <- YgivenGX.Pred_D0*(1-DgivenGX.Pred) + YgivenGX.Pred_D1*DgivenGX.Pred
 mse_para <- mean((data$adult_income_rank - Ypred)^2)
+
+
+##### Manually run the nuisance functions of cdgd0_ml, nnet
+set.seed(1)
+### estimate the nuisance functions with cross-fitting
+sample1 <- sample(nrow(data), floor(nrow(data)/2), replace=FALSE)
+sample2 <- setdiff(1:nrow(data), sample1)
+
+### propensity score model
+data[,D] <- as.factor(data[,D])
+levels(data[,D]) <- c("D0","D1")  # necessary for caret implementation of ranger
+
+message <- utils::capture.output( DgivenGX.Model.sample1 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="nnet",
+                                                                           preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=FALSE ))
+message <- utils::capture.output( DgivenGX.Model.sample2 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="nnet",
+                                                                           preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=FALSE ))
+
+data[,D] <- as.numeric(data[,D])-1
+
+# treatment predictions
+DgivenGX.Pred <- rep(NA, nrow(data))
+
+DgivenGX.Pred[sample2] <- stats::predict(DgivenGX.Model.sample1, newdata = data[sample2,], type="prob")[,2]
+DgivenGX.Pred[sample1] <- stats::predict(DgivenGX.Model.sample2, newdata = data[sample1,], type="prob")[,2]
+
+### outcome regression model
+message <- utils::capture.output( YgivenDGX.Model.sample1 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="nnet",
+                                                                          preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=TRUE ))
+message <- utils::capture.output( YgivenDGX.Model.sample2 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="nnet",
+                                                                          preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=TRUE ))
+
+### outcome predictions
+YgivenGX.Pred_D0 <- YgivenGX.Pred_D1 <- rep(NA, nrow(data))
+
+pred_data <- data
+pred_data[,D] <- 0
+
+YgivenGX.Pred_D0[sample2] <- stats::predict(YgivenDGX.Model.sample1, newdata = pred_data[sample2,])
+YgivenGX.Pred_D0[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = pred_data[sample1,])
+
+pred_data <- data
+pred_data[,D] <- 1
+
+YgivenGX.Pred_D1[sample2] <- stats::predict(YgivenDGX.Model.sample1, newdata = pred_data[sample2,])
+YgivenGX.Pred_D1[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = pred_data[sample1,])
+
+### Diagnostics 
+# covariate overlap
+p_score_nnet <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
+  geom_histogram(bins=50) +
+  labs(title = "(b) Neural networks", x = "Propensity score", y = "Frequency")
+
+# covariate balance after weighting
+balance_nnet <- sapply(c(G,X), ASD)
+
+# outcome model fit
+Ypred <- YgivenGX.Pred_D0*(1-DgivenGX.Pred) + YgivenGX.Pred_D1*DgivenGX.Pred
+mse_nnet <- mean((data$adult_income_rank - Ypred)^2)
+
+
+##### Manually run the nuisance functions of cdgd0_ml, gbm
+set.seed(1)
+data <- as.data.frame(data)
+
+### estimate the nuisance functions with cross-fitting
+sample1 <- sample(nrow(data), floor(nrow(data)/2), replace=FALSE)
+sample2 <- setdiff(1:nrow(data), sample1)
+
+### propensity score model
+data[,D] <- as.factor(data[,D])
+levels(data[,D]) <- c("D0","D1")  # necessary for caret implementation of ranger
+
+message <- utils::capture.output( DgivenGX.Model.sample1 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="gbm",
+                                                                           trControl=caret::trainControl(method="cv")) )
+message <- utils::capture.output( DgivenGX.Model.sample2 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="gbm",
+                                                                           trControl=caret::trainControl(method="cv")) )
+
+data[,D] <- as.numeric(data[,D])-1
+
+# treatment predictions
+DgivenGX.Pred <- rep(NA, nrow(data))
+
+DgivenGX.Pred[sample2] <- stats::predict(DgivenGX.Model.sample1, newdata = data[sample2,], type="prob")[,2]
+DgivenGX.Pred[sample1] <- stats::predict(DgivenGX.Model.sample2, newdata = data[sample1,], type="prob")[,2]
+
+### outcome regression model
+message <- utils::capture.output( YgivenDGX.Model.sample1 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="gbm",
+                                                                            trControl=caret::trainControl(method="cv")) )
+message <- utils::capture.output( YgivenDGX.Model.sample2 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="gbm",
+                                                                            trControl=caret::trainControl(method="cv")) )
+
+### outcome predictions
+YgivenGX.Pred_D0 <- YgivenGX.Pred_D1 <- rep(NA, nrow(data))
+
+pred_data <- data
+pred_data[,D] <- 0
+
+YgivenGX.Pred_D0[sample2] <- stats::predict(YgivenDGX.Model.sample1, newdata = pred_data[sample2,])
+YgivenGX.Pred_D0[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = pred_data[sample1,])
+
+pred_data <- data
+pred_data[,D] <- 1
+
+YgivenGX.Pred_D1[sample2] <- stats::predict(YgivenDGX.Model.sample1, newdata = pred_data[sample2,])
+YgivenGX.Pred_D1[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = pred_data[sample1,])
+
+### Diagnostics 
+# covariate overlap
+p_score_gbm <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
+  geom_histogram(bins=50) +
+  labs(title = "(c) Generalized boosting machines", x = "Propensity score", y = "Frequency")
+
+# covariate balance after weighting
+balance_gbm <- sapply(c(G,X), ASD)
+
+# outcome model fit
+Ypred <- YgivenGX.Pred_D0*(1-DgivenGX.Pred) + YgivenGX.Pred_D1*DgivenGX.Pred
+mse_gbm <- mean((data$adult_income_rank - Ypred)^2)
+
+
+##### Manually run the nuisance functions of cdgd0_ml, ranger
+set.seed(1)
+# estimate the nuisance functions within each group, so that the final estimates are independent across groups
+sample1 <- sample(nrow(data), floor(nrow(data)/2), replace=FALSE)
+sample2 <- setdiff(1:nrow(data), sample1)
+
+YgivenDGX.Model.sample1 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="ranger",
+                                                                          trControl=caret::trainControl(method="cv")) 
+
+# outcome regression model
+YgivenDGX.Model.sample1 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="ranger",
+                                                                          trControl=caret::trainControl(method="boot", number=15),
+                                                                          tuneGrid=expand.grid(mtry=c(10,15,20),splitrule=c("variance"),min.node.size=c(200,250,300)))
+YgivenDGX.Model.sample2 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="ranger",
+                                                                          trControl=caret::trainControl(method="boot", number=15),
+                                                                          tuneGrid=expand.grid(mtry=c(10,15,20),splitrule=c("variance"),min.node.size=c(200,250,300)))
+
+# propensity score model
+data[,D] <- as.factor(data[,D])
+levels(data[,D]) <- c("D0","D1")  # necessary for caret implementation of ranger
+
+DgivenGX.Model.sample1 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="ranger",
+                                                                         trControl=caret::trainControl(method="boot", number=15, classProbs=TRUE),
+                                                                         tuneGrid=expand.grid(mtry=c(10,15,20),splitrule=c("gini"),min.node.size=c(200,250,300))) 
+DgivenGX.Model.sample2 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="ranger",
+                                                                         trControl=caret::trainControl(method="boot", number=15, classProbs=TRUE),
+                                                                         tuneGrid=expand.grid(mtry=c(10,15,20),splitrule=c("gini"),min.node.size=c(200,250,300)))
+data[,D] <- as.numeric(data[,D])-1
+
+### cross-fitted predictions
+YgivenGX.Pred_D0 <- YgivenGX.Pred_D1 <- DgivenGX.Pred <- rep(NA, nrow(data))
+
+pred_data <- data
+pred_data[,D] <- 0
+YgivenGX.Pred_D0[sample2] <- stats::predict(YgivenDGX.Model.sample1, newdata = pred_data[sample2,])
+YgivenGX.Pred_D0[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = pred_data[sample1,])
+
+pred_data <- data
+pred_data[,D] <- 1
+YgivenGX.Pred_D1[sample2] <- stats::predict(YgivenDGX.Model.sample1, newdata = pred_data[sample2,])
+YgivenGX.Pred_D1[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = pred_data[sample1,])
+
+pred_data <- data
+DgivenGX.Pred[sample2] <- stats::predict(DgivenGX.Model.sample1, newdata = pred_data[sample2,], type="prob")[,2]
+DgivenGX.Pred[sample1] <- stats::predict(DgivenGX.Model.sample2, newdata = pred_data[sample1,], type="prob")[,2]
+
+### Diagnostics 
+# covariate overlap
+p_score_ranger <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
+  geom_histogram(bins=50) +
+  labs(title = "(d) Random forests", x = "Propensity score", y = "Frequency")
+
+# covariate balance after weighting
+balance_ranger <- sapply(c(G,X), ASD)
+
+# outcome model fit
+Ypred <- YgivenGX.Pred_D0*(1-DgivenGX.Pred) + YgivenGX.Pred_D1*DgivenGX.Pred
+mse_ranger <- mean((data$adult_income_rank - Ypred)^2)
+
+##### pool the results together
+grid.arrange(p_score_para, p_score_nnet, p_score_gbm, p_score_ranger, ncol = 2)
+
+c(mse_para, mse_gbm, mse_nnet, mse_ranger)
+
+
+## get the balance when no weighted is used
+ASD_unweighted <- function(j) {
+  mean1 <- mean(data[,j]*(data[,D]/mean(data[,D])))
+  mean0 <- mean(data[,j]*((1-data[,D])/mean((1-data[,D]))))
+
+  var1 <- sum(data[,D])/( (sum(data[,D]))^2 - sum((data[,D])^2) ) * sum( data[,D]*(data[,j] - mean1)^2 )
+  var0 <- sum((1-data[,D]))/( sum((1-data[,D]))^2 - sum(((1-data[,D]))^2) ) * sum( (1-data[,D])*(data[,j] - mean0)^2 )
+
+  return( abs((mean1-mean0)/sqrt((var1+var0)/2)*100) )
+  }
+
+balance_unweighted <- sapply(c(G,X), ASD_unweighted)
+
+data_balance <- data.frame(model = rep(c("Parametric", "Generalized boosting machines", "Neural networks", "Random forests", "Unweighted"), each = length(balance_para)),
+                           variable = rep(c(G,X), 5),
+                           value = c(balance_para, balance_gbm, balance_nnet, balance_ranger, balance_unweighted))
+data_balance$variable <- factor(data_balance$variable, levels = c(G,X))
+data_balance$model <- factor(data_balance$model, levels = c("Unweighted", "Parametric", "Generalized boosting machines", "Neural networks", "Random forests")) # for ordering the legend
+
+ggplot(data_balance, aes(x = value, y = variable, shape = model, color = model)) +
+  geom_point(size = 3) +
+  scale_shape_manual(values = c(16, 17, 15, 19, 18)) + 
+  scale_color_manual(values = c("black", "blue", "green", "red", "purple")) + 
+  labs(x = "Absolute standardized difference", y = "") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 12)) +
+  geom_vline(xintercept = 20, linetype = "solid", color = "black") +
+  guides(shape = guide_legend(title = ""), color = guide_legend(title = "")) 
