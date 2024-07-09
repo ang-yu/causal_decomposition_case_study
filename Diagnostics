@@ -151,6 +151,30 @@ p_score_para <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) +
 balance_para <- sapply(c(G,X), ASD)
 
 # outcome model fit
+# in order to make comparison with ML models (which are paired with cross-fitting) fair, we also use cross-fitting here to calculate the MSE
+set.seed(1)
+sample1 <- sample(nrow(data), floor(nrow(data)/2), replace=FALSE)
+sample2 <- setdiff(1:nrow(data), sample1)
+
+### outcome regression model
+YgivenDGX.Model.sample1 <- stats::lm(stats::as.formula(paste(Y, paste(paste(D,c(G,X),sep="*"),collapse="+"), sep="~")), data=data[sample1,])
+YgivenDGX.Model.sample2 <- stats::lm(stats::as.formula(paste(Y, paste(paste(D,c(G,X),sep="*"),collapse="+"), sep="~")), data=data[sample2,])
+
+### outcome predictions
+YgivenGX.Pred_D0 <- YgivenGX.Pred_D1 <- rep(NA, nrow(data))
+
+pred_data <- data
+pred_data[,D] <- 0
+
+YgivenGX.Pred_D0[sample2] <- stats::predict(YgivenDGX.Model.sample1, newdata = pred_data[sample2,])
+YgivenGX.Pred_D0[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = pred_data[sample1,])
+
+pred_data <- data
+pred_data[,D] <- 1
+
+YgivenGX.Pred_D1[sample2] <- stats::predict(YgivenDGX.Model.sample1, newdata = pred_data[sample2,])
+YgivenGX.Pred_D1[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = pred_data[sample1,])
+
 Ypred <- YgivenGX.Pred_D0*(1-DgivenGX.Pred) + YgivenGX.Pred_D1*DgivenGX.Pred
 mse_para <- mean((data$adult_income_rank - Ypred)^2)
 
@@ -165,10 +189,10 @@ sample2 <- setdiff(1:nrow(data), sample1)
 data[,D] <- as.factor(data[,D])
 levels(data[,D]) <- c("D0","D1")  # necessary for caret implementation of ranger
 
-message <- utils::capture.output( DgivenGX.Model.sample1 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="nnet",
-                                                                           preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=FALSE ))
-message <- utils::capture.output( DgivenGX.Model.sample2 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="nnet",
-                                                                           preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=FALSE ))
+DgivenGX.Model.sample1 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="nnet",
+                                                                           preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=FALSE )
+DgivenGX.Model.sample2 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="nnet",
+                                                                           preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=FALSE )
 
 data[,D] <- as.numeric(data[,D])-1
 
@@ -179,10 +203,10 @@ DgivenGX.Pred[sample2] <- stats::predict(DgivenGX.Model.sample1, newdata = data[
 DgivenGX.Pred[sample1] <- stats::predict(DgivenGX.Model.sample2, newdata = data[sample1,], type="prob")[,2]
 
 ### outcome regression model
-message <- utils::capture.output( YgivenDGX.Model.sample1 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="nnet",
-                                                                          preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=TRUE ))
-message <- utils::capture.output( YgivenDGX.Model.sample2 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="nnet",
-                                                                          preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=TRUE ))
+YgivenDGX.Model.sample1 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="nnet",
+                                                                          preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=TRUE )
+YgivenDGX.Model.sample2 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="nnet",
+                                                                          preProc=c("center","scale"), trControl=caret::trainControl(method="cv"), linout=TRUE )
 
 ### outcome predictions
 YgivenGX.Pred_D0 <- YgivenGX.Pred_D1 <- rep(NA, nrow(data))
@@ -225,10 +249,10 @@ sample2 <- setdiff(1:nrow(data), sample1)
 data[,D] <- as.factor(data[,D])
 levels(data[,D]) <- c("D0","D1")  # necessary for caret implementation of ranger
 
-message <- utils::capture.output( DgivenGX.Model.sample1 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="gbm",
-                                                                           trControl=caret::trainControl(method="cv")) )
-message <- utils::capture.output( DgivenGX.Model.sample2 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="gbm",
-                                                                           trControl=caret::trainControl(method="cv")) )
+DgivenGX.Model.sample1 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="gbm",
+                                                                           trControl=caret::trainControl(method="cv"))
+DgivenGX.Model.sample2 <- caret::train(stats::as.formula(paste(D, paste(G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="gbm",
+                                                                           trControl=caret::trainControl(method="cv"))
 
 data[,D] <- as.numeric(data[,D])-1
 
@@ -239,10 +263,10 @@ DgivenGX.Pred[sample2] <- stats::predict(DgivenGX.Model.sample1, newdata = data[
 DgivenGX.Pred[sample1] <- stats::predict(DgivenGX.Model.sample2, newdata = data[sample1,], type="prob")[,2]
 
 ### outcome regression model
-message <- utils::capture.output( YgivenDGX.Model.sample1 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="gbm",
-                                                                            trControl=caret::trainControl(method="cv")) )
-message <- utils::capture.output( YgivenDGX.Model.sample2 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="gbm",
-                                                                            trControl=caret::trainControl(method="cv")) )
+YgivenDGX.Model.sample1 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample1,], method="gbm",
+                                                                            trControl=caret::trainControl(method="cv"))
+YgivenDGX.Model.sample2 <- caret::train(stats::as.formula(paste(Y, paste(D,G,paste(X,collapse="+"),sep="+"), sep="~")), data=data[sample2,], method="gbm",
+                                                                            trControl=caret::trainControl(method="cv"))
 
 ### outcome predictions
 YgivenGX.Pred_D0 <- YgivenGX.Pred_D1 <- rep(NA, nrow(data))
@@ -333,12 +357,23 @@ Ypred <- YgivenGX.Pred_D0*(1-DgivenGX.Pred) + YgivenGX.Pred_D1*DgivenGX.Pred
 mse_ranger <- mean((data$adult_income_rank - Ypred)^2)
 
 ##### pool the results together
+### Covariate overlap
 grid.arrange(p_score_para, p_score_nnet, p_score_gbm, p_score_ranger, ncol = 2)
 
-mse_intercept <- mean((data$adult_income_rank - mean(data$adult_income_rank))^2)
+### Outcome model fit
+## get the MSEs for intercept-only model
+set.seed(1)
+sample1 <- sample(nrow(data), floor(nrow(data)/2), replace=FALSE)
+sample2 <- setdiff(1:nrow(data), sample1)
+
+Ypred[sample1] <- mean(data$adult_income_rank[sample2])
+Ypred[sample2] <- mean(data$adult_income_rank[sample1])
+
+mse_intercept <- mean((data$adult_income_rank - Ypred)^2)
+
 c(mse_intercept, mse_para, mse_nnet, mse_gbm, mse_ranger)
 
-
+### Covariate balance after weighting
 ## get the balance when no weighted is used
 ASD_unweighted <- function(j) {
   mean1 <- mean(data[,j]*(data[,D]/mean(data[,D])))
