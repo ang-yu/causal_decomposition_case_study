@@ -8,8 +8,6 @@ library("xtable")
 library("ggplot2")
 library("gridExtra")
 
-library("cdgd")
-
 rm(list=ls(all=TRUE))
 
 ## The absolute standardized difference function for covariate j
@@ -145,7 +143,7 @@ YgivenGX.Pred_D1 <- stats::predict(YgivenDGX.Model, newdata = pred_data)
 # covariate overlap
 p_score_para <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
   geom_histogram(bins=50) +
-  labs(title = "(a) Parametric model", x = "Propensity score", y = "Frequency")
+  labs(title = "(d) Parametric model", x = "Propensity score", y = "Frequency")
 
 # covariate balance after weighting
 balance_para <- sapply(c(G,X), ASD)
@@ -227,7 +225,7 @@ YgivenGX.Pred_D1[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = p
 # covariate overlap
 p_score_nnet <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
   geom_histogram(bins=50) +
-  labs(title = "(b) Neural networks", x = "Propensity score", y = "Frequency")
+  labs(title = "(a) Neural networks", x = "Propensity score", y = "Frequency")
 
 # covariate balance after weighting
 balance_nnet <- sapply(c(G,X), ASD)
@@ -287,7 +285,7 @@ YgivenGX.Pred_D1[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = p
 # covariate overlap
 p_score_gbm <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
   geom_histogram(bins=50) +
-  labs(title = "(c) Generalized boosting machines", x = "Propensity score", y = "Frequency")
+  labs(title = "(b) Generalized boosting machines", x = "Propensity score", y = "Frequency")
 
 # covariate balance after weighting
 balance_gbm <- sapply(c(G,X), ASD)
@@ -347,7 +345,7 @@ DgivenGX.Pred[sample1] <- stats::predict(DgivenGX.Model.sample2, newdata = pred_
 # covariate overlap
 p_score_ranger <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
   geom_histogram(bins=50) +
-  labs(title = "(d) Random forests", x = "Propensity score", y = "Frequency")
+  labs(title = "(c) Random forests", x = "Propensity score", y = "Frequency")
 
 # covariate balance after weighting
 balance_ranger <- sapply(c(G,X), ASD)
@@ -358,7 +356,7 @@ mse_ranger <- mean((data$adult_income_rank - Ypred)^2)
 
 ##### pool the results together
 ### Covariate overlap
-grid.arrange(p_score_para, p_score_nnet, p_score_gbm, p_score_ranger, ncol = 2)
+grid.arrange(p_score_nnet, p_score_gbm, p_score_ranger, p_score_para, ncol = 2)
 
 ### Outcome model fit
 ## get the MSEs for intercept-only model
@@ -387,16 +385,16 @@ ASD_unweighted <- function(j) {
 
 balance_unweighted <- sapply(c(G,X), ASD_unweighted)
 
-data_balance <- data.frame(model = rep(c("Parametric", "Generalized boosting machines", "Neural networks", "Random forests", "Unweighted"), each = length(balance_para)),
+data_balance <- data.frame(model = rep(c("Parametric", "GBM", "Neural networks", "Random forests", "Unweighted"), each = length(balance_para)),
                            variable = rep(c(G,X), 5),
                            value = c(balance_para, balance_gbm, balance_nnet, balance_ranger, balance_unweighted))
 data_balance$variable <- factor(data_balance$variable, levels = c(G,X))
-data_balance$model <- factor(data_balance$model, levels = c("Unweighted", "Parametric", "Generalized boosting machines", "Neural networks", "Random forests")) # for ordering the legend
+data_balance$model <- factor(data_balance$model, levels = c("Unweighted", "Parametric", "Neural networks", "GBM", "Random forests")) # for ordering the legend
 
 ggplot(data_balance, aes(x = value, y = variable, shape = model, color = model)) +
   geom_point(size = 3) +
-  scale_shape_manual(values = c(16, 17, 15, 19, 18)) + 
-  scale_color_manual(values = c("black", "blue", "green", "red", "purple")) + 
+  scale_shape_manual(values = c(16, 17, 19, 15, 18)) + 
+  scale_color_manual(values = c("black", "blue", "red", "green", "purple")) + 
   labs(x = "Absolute standardized difference", y = "") +
   theme_minimal() +
   theme(axis.text.y = element_text(size = 12)) +
