@@ -1,0 +1,110 @@
+
+data <- readRDS("/Users/Ang/Desktop/Research/Causal_decomposition/Data/data_cleaned.rds")
+
+data$gender <- as.numeric(data$gender)-1
+
+data$parental_presence <- as.numeric(data$parental_presence)-1
+
+data$n_sib <- as.numeric(data$n_sib)-1
+
+data$urban <- as.numeric(data$urban)-1
+
+data$edu_exp <- as.numeric(data$edu_exp)-2
+data$edu_exp[data$edu_exp==-1] <- 0
+
+data$age <- as.numeric(data$age)-1
+
+data$friend_edu_exp <- as.numeric(data$friend_edu_exp)-2
+data$friend_edu_exp[data$friend_edu_exp==-1] <- 0
+
+data$foreign_lang <- as.numeric(data$foreign_lang)-1
+
+data$mother_seperate <- as.numeric(data$mother_seperate)-1
+
+data$m_work <- as.numeric(data$m_work)-1
+
+data$pincome_1 <- NA
+data$pincome_1[data$parental_income_rank>=0.60 & !is.na(data$parental_income_rank)] <- 1
+data$pincome_1[data$parental_income_rank<0.60 & !is.na(data$parental_income_rank)] <- 0
+
+data$pincome_2 <- NA
+data$pincome_2[data$parental_income_rank<=0.40 & !is.na(data$parental_income_rank)] <- 1
+data$pincome_2[data$parental_income_rank>0.40 & !is.na(data$parental_income_rank)] <- 0
+
+data <- data[!is.na(data$pincome_1) & (data$pincome_1==1 | data$pincome_2==1), ]
+
+data$outcome_m <- is.na(data$adult_income_rank)
+data$outcome_m <- as.numeric(data$outcome_m)
+table(data$outcome_m)
+
+colnames(data)
+
+data <- data[,colnames(data)[!colnames(data) %in% c("adult_income_rank", "completion")]]
+data <- na.omit(data) 
+
+##### get missingness
+cor.test(data$parental_income_rank, data$outcome_m)
+
+mean(data$outcome_m[data$race=="Other"])
+mean(data$outcome_m[data$race=="Black"])
+mean(data$outcome_m[data$race=="Hispanic"])
+chisq.test(table(data$outcome_m, data$race))
+
+mean(data$outcome_m[data$gender==1])
+mean(data$outcome_m[data$gender==0])
+chisq.test(table(data$outcome_m, data$gender))
+
+cor.test(data$medu, data$outcome_m)
+
+mean(data$outcome_m[data$parental_presence==1])
+mean(data$outcome_m[data$parental_presence==0])
+chisq.test(table(data$outcome_m, data$parental_presence))
+
+cor.test(data$n_sib, data$outcome_m)
+
+mean(data$outcome_m[data$urban==1])
+mean(data$outcome_m[data$urban==0])
+chisq.test(table(data$outcome_m, data$urban))
+
+mean(data$outcome_m[data$edu_exp==1])
+mean(data$outcome_m[data$edu_exp==0])
+chisq.test(table(data$outcome_m, data$edu_exp))
+
+cor.test(data$AFQT, data$outcome_m)
+
+cor.test(data$age, data$outcome_m)
+
+mean(data$outcome_m[data$friend_edu_exp==1])
+mean(data$outcome_m[data$friend_edu_exp==0])
+chisq.test(table(data$outcome_m, data$friend_edu_exp))
+
+cor.test(data$rotter_score, data$outcome_m)
+
+cor.test(data$rosenberg_irt_score, data$outcome_m)
+
+cor.test(as.numeric(data$school_satisfaction), data$outcome_m)
+
+mean(data$outcome_m[data$foreign_lang==1])
+mean(data$outcome_m[data$foreign_lang==0])
+chisq.test(table(data$outcome_m, data$foreign_lang))
+
+mean(data$outcome_m[data$SMSA==0])
+mean(data$outcome_m[data$SMSA==1])
+mean(data$outcome_m[data$SMSA==2])
+mean(data$outcome_m[data$SMSA==3])
+chisq.test(table(data$outcome_m, data$SMSA))
+
+mean(data$outcome_m[data$mother_seperate==1])
+mean(data$outcome_m[data$mother_seperate==0])
+chisq.test(table(data$outcome_m, data$mother_seperate))
+
+mean(data$outcome_m[data$m_work==1])
+mean(data$outcome_m[data$m_work==0])
+chisq.test(table(data$outcome_m, data$m_work))
+
+mean(data$outcome_m[data$region==1])
+mean(data$outcome_m[data$region==2])
+mean(data$outcome_m[data$region==3])
+mean(data$outcome_m[data$region==4])
+chisq.test(table(data$outcome_m, data$region))
+
