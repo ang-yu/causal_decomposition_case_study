@@ -143,7 +143,8 @@ YgivenGX.Pred_D1 <- stats::predict(YgivenDGX.Model, newdata = pred_data)
 # covariate overlap
 p_score_para <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
   geom_histogram(bins=50) +
-  labs(title = "(d) Parametric model", x = "Propensity score", y = "Frequency")
+  labs(title = "(d) Parametric model", x = "Propensity score", y = "Frequency") +
+  theme_minimal()
 
 # covariate balance after weighting
 balance_para <- sapply(c(G,X), ASD)
@@ -225,7 +226,8 @@ YgivenGX.Pred_D1[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = p
 # covariate overlap
 p_score_nnet <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
   geom_histogram(bins=50) +
-  labs(title = "(a) Neural networks", x = "Propensity score", y = "Frequency")
+  labs(title = "(a) Neural networks", x = "Propensity score", y = "Frequency") +
+  theme_minimal()
 
 # covariate balance after weighting
 balance_nnet <- sapply(c(G,X), ASD)
@@ -285,7 +287,8 @@ YgivenGX.Pred_D1[sample1] <- stats::predict(YgivenDGX.Model.sample2, newdata = p
 # covariate overlap
 p_score_gbm <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
   geom_histogram(bins=50) +
-  labs(title = "(b) Generalized boosting machines", x = "Propensity score", y = "Frequency")
+  labs(title = "(b) Generalized boosting machines", x = "Propensity score", y = "Frequency") +
+  theme_minimal()
 
 # covariate balance after weighting
 balance_gbm <- sapply(c(G,X), ASD)
@@ -345,7 +348,8 @@ DgivenGX.Pred[sample1] <- stats::predict(DgivenGX.Model.sample2, newdata = pred_
 # covariate overlap
 p_score_ranger <- ggplot(data.frame(value=DgivenGX.Pred), aes(x=DgivenGX.Pred)) + 
   geom_histogram(bins=50) +
-  labs(title = "(c) Random forests", x = "Propensity score", y = "Frequency")
+  labs(title = "(c) Random forests", x = "Propensity score", y = "Frequency") +
+  theme_minimal()
 
 # covariate balance after weighting
 balance_ranger <- sapply(c(G,X), ASD)
