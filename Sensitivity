@@ -146,43 +146,150 @@ data[,D] <- as.numeric(data[,D])-1
 C <- X[!X%in%"edu_exp"]
 
 rho1_exp <- coef( lm( as.formula(paste("edu_exp", paste(c(D,C), collapse="+"), sep="~")) , data=data[data[,G]==0, ] ) )[2]
-
 rho2_exp <- coef( lm( as.formula(paste(Y, paste(c(D,X), collapse="+"), sep="~")) , data=data[data[,G]==0, ] ) )[8]
-
-#library(akima)
-
-0.031 0.028 0.029 0.036
-# benchmark bias for the prevalence component
-rho1_exp*rho2_exp*(mean(data[data[,G]==1, D]) - mean(data[data[,G]==0, D]))
-
-0.010 0.007 0.013 0.009
-# benchmark bias for the conditional prevalence component
-rho1_exp*rho2_exp*(mean(pred_para) - mean(data[data[,G]==0, D]))
 
 rho1_seq <- seq(0, 4*rho1_exp, length.out=100)
 rho2_seq <- seq(0, 4*rho2_exp, length.out=100)
-
-### plot for nnet
 contour_data <- as.data.frame(expand.grid(rho1 = rho1_seq, rho2 = rho2_seq))
+### plot for nnet
 contour_data$prevalence <- 0.031-contour_data$rho1*contour_data$rho2*(mean(data[data[,G]==1, D]) - mean(data[data[,G]==0, D]))
 contour_data$cond_prevalence <- 0.010-contour_data$rho1*contour_data$rho2*(mean(pred_nnet) - mean(data[data[,G]==0, D]))
 
 nnet_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) +
-  geom_contour(aes(colour = factor(..level..)), breaks = seq(0, 0.03, by=0.01)) +
+  geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.009,0.018,0.027)) +
   geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
-  geom_text(aes(x = rho1_exp, y = rho2_exp, label = "(0.27,0.05)"), 
-            hjust = -0.1, vjust = -0.1, color = "blue", size = 3) +
+  annotate("text", x=rho1_exp, y=rho2_exp+0.01, 
+           label = "(0.27,0.05)", size=3) +
+  geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
+  annotate("text", x=rho1_exp*2, y=rho2_exp*2+0.01, 
+           label = "(0.54,0.10)", size=3) +
   geom_point(aes(x = rho1_exp*3, y = rho2_exp*3), color = "red") +
-  labs(title = "(a) Parametric models (original estimate=0.031)", x="rho_1b", y="rho_2b",) +
+  annotate("text", x=rho1_exp*3, y=rho2_exp*3+0.01, 
+           label = "(0.81,0.15)", size=3) +
+  labs(title = "(a) Neural networks (original estimate=0.031)", x="rho_1b", y="rho_2b",) +
   scale_color_manual(values = c("#a6bddb", "#9ecae1", "#3182bd", "#08519c"), name = "Debiased estimate") +
   theme_minimal()
 
 nnet_cond_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = cond_prevalence)) +
-  geom_contour(aes(colour = factor(..level..)), breaks = seq(0, 0.009, length.out=4)) +
+  geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.002,0.004,0.006)) +
   geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
-  geom_text(aes(x = rho1_exp, y = rho2_exp, label = "(0.27,0.05)"), 
-            hjust = -0.1, vjust = -0.1, color = "blue", size = 3) +
+  annotate("text", x=rho1_exp+0.05, y=rho2_exp+0.01, 
+           label = "(0.27,0.05)", size=3) +
+  geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
+  annotate("text", x=rho1_exp*2, y=rho2_exp*2+0.01, 
+           label = "(0.54,0.10)", size=3) +
   geom_point(aes(x = rho1_exp*3, y = rho2_exp*3), color = "red") +
-  labs(title = "(a) Parametric models (original estimate=0.010)", x="rho_1b", y="rho_2b",) +
+  annotate("text", x=rho1_exp*3, y=rho2_exp*3+0.01, 
+           label = "(0.81,0.15)", size=3) +
+  labs(title = "(a) Neural networks (original estimate=0.010)", x="rho_1b", y="rho_2b",) +
   scale_color_manual(values = c("#a6bddb", "#9ecae1", "#3182bd", "#08519c"), name = "Debiased estimate") +
   theme_minimal()
+
+### plot for gbm  
+contour_data$prevalence <- 0.028-contour_data$rho1*contour_data$rho2*(mean(data[data[,G]==1, D]) - mean(data[data[,G]==0, D]))
+contour_data$cond_prevalence <- 0.007-contour_data$rho1*contour_data$rho2*(mean(pred_gbm) - mean(data[data[,G]==0, D]))
+
+gbm_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) +
+  geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.009,0.018,0.027)) +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  annotate("text", x=rho1_exp, y=rho2_exp+0.01, 
+           label = "(0.27,0.05)", size=3) +
+  geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
+  annotate("text", x=rho1_exp*2, y=rho2_exp*2+0.01, 
+           label = "(0.54,0.10)", size=3) +
+  geom_point(aes(x = rho1_exp*3, y = rho2_exp*3), color = "red") +
+  annotate("text", x=rho1_exp*3, y=rho2_exp*3+0.01, 
+           label = "(0.81,0.15)", size=3) +
+  labs(title = "(b) GBM (original estimate=0.028)", x="rho_1b", y="rho_2b",) +
+  scale_color_manual(values = c("#a6bddb", "#9ecae1", "#3182bd", "#08519c"), name = "Debiased estimate") +
+  theme_minimal()
+
+gbm_cond_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = cond_prevalence)) +
+  geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.002,0.004,0.006)) +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  annotate("text", x=rho1_exp+0.03, y=rho2_exp+0.01, 
+           label = "(0.27,0.05)", size=3) +
+  geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
+  annotate("text", x=rho1_exp*2, y=rho2_exp*2+0.01, 
+           label = "(0.54,0.10)", size=3) +
+  geom_point(aes(x = rho1_exp*3, y = rho2_exp*3), color = "red") +
+  annotate("text", x=rho1_exp*3, y=rho2_exp*3+0.01, 
+           label = "(0.81,0.15)", size=3) +
+  labs(title = "(b) GBM (original estimate=0.007)", x="rho_1b", y="rho_2b",) +
+  scale_color_manual(values = c("#a6bddb", "#9ecae1", "#3182bd", "#08519c"), name = "Debiased estimate") +
+  theme_minimal()
+
+### plot for ranger  
+contour_data$prevalence <- 0.029-contour_data$rho1*contour_data$rho2*(mean(data[data[,G]==1, D]) - mean(data[data[,G]==0, D]))
+contour_data$cond_prevalence <- 0.013-contour_data$rho1*contour_data$rho2*(mean(pred_ranger) - mean(data[data[,G]==0, D]))
+
+ranger_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) +
+  geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.009,0.018,0.027)) +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  annotate("text", x=rho1_exp, y=rho2_exp+0.01, 
+           label = "(0.27,0.05)", size=3) +
+  geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
+  annotate("text", x=rho1_exp*2, y=rho2_exp*2+0.01, 
+           label = "(0.54,0.10)", size=3) +
+  geom_point(aes(x = rho1_exp*3, y = rho2_exp*3), color = "red") +
+  annotate("text", x=rho1_exp*3, y=rho2_exp*3+0.01, 
+           label = "(0.81,0.15)", size=3) +
+  labs(title = "(c) Random forests (original estimate=0.029)", x="rho_1b", y="rho_2b",) +
+  scale_color_manual(values = c("#a6bddb", "#9ecae1", "#3182bd", "#08519c"), name = "Debiased estimate") +
+  theme_minimal()
+
+ranger_cond_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = cond_prevalence)) +
+  geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.002,0.004,0.006)) +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  annotate("text", x=rho1_exp+0.05, y=rho2_exp+0.01, 
+           label = "(0.27,0.05)", size=3) +
+  geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
+  annotate("text", x=rho1_exp*2, y=rho2_exp*2+0.01, 
+           label = "(0.54,0.10)", size=3) +
+  geom_point(aes(x = rho1_exp*3, y = rho2_exp*3), color = "red") +
+  annotate("text", x=rho1_exp*3, y=rho2_exp*3+0.01, 
+           label = "(0.81,0.15)", size=3) +
+  labs(title = "(c) Random forests (original estimate=0.013)", x="rho_1b", y="rho_2b",) +
+  scale_color_manual(values = c("#a6bddb", "#9ecae1", "#3182bd", "#08519c"), name = "Debiased estimate") +
+  theme_minimal()
+
+### plot for parametric  
+contour_data$prevalence <- 0.036-contour_data$rho1*contour_data$rho2*(mean(data[data[,G]==1, D]) - mean(data[data[,G]==0, D]))
+contour_data$cond_prevalence <- 0.009-contour_data$rho1*contour_data$rho2*(mean(pred_para) - mean(data[data[,G]==0, D]))
+
+para_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) +
+  geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.009,0.018,0.027)) +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  annotate("text", x=rho1_exp, y=rho2_exp+0.01, 
+           label = "(0.27,0.05)", size=3) +
+  geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
+  annotate("text", x=rho1_exp*2, y=rho2_exp*2+0.01, 
+           label = "(0.54,0.10)", size=3) +
+  geom_point(aes(x = rho1_exp*3, y = rho2_exp*3), color = "red") +
+  annotate("text", x=rho1_exp*3, y=rho2_exp*3+0.01, 
+           label = "(0.81,0.15)", size=3) +
+  labs(title = "(d) Parametric models (original estimate=0.036)", x="rho_1b", y="rho_2b",) +
+  scale_color_manual(values = c("#a6bddb", "#9ecae1", "#3182bd", "#08519c"), name = "Debiased estimate") +
+  theme_minimal()
+
+para_cond_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = cond_prevalence)) +
+  geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.002,0.004,0.006)) +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  annotate("text", x=rho1_exp+0.03, y=rho2_exp+0.01, 
+           label = "(0.27,0.05)", size=3) +
+  geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
+  annotate("text", x=rho1_exp*2, y=rho2_exp*2+0.01, 
+           label = "(0.54,0.10)", size=3) +
+  geom_point(aes(x = rho1_exp*3, y = rho2_exp*3), color = "red") +
+  annotate("text", x=rho1_exp*3, y=rho2_exp*3+0.01, 
+           label = "(0.81,0.15)", size=3) +
+  labs(title = "(d) Parametric models (original estimate=0.009)", x="rho_1b", y="rho_2b",) +
+  scale_color_manual(values = c("#a6bddb", "#9ecae1", "#3182bd", "#08519c"), name = "Debiased estimate") +
+  theme_minimal()
+
+all_unconditional <- grid.arrange(nnet_prevalence, gbm_prevalence, ranger_prevalence, para_prevalence, ncol=2)
+ggsave(paste("/Users/Ang/Desktop/Research/Causal_decomposition/sensitivity_unconditional_",Sys.Date(),".jpg", sep=""), all_unconditional, width=10, height=5)
+
+all_conditional <- grid.arrange(nnet_cond_prevalence, gbm_cond_prevalence, ranger_cond_prevalence, para_cond_prevalence, ncol=2)
+ggsave(paste("/Users/Ang/Desktop/Research/Causal_decomposition/sensitivity_conditional_",Sys.Date(),".jpg", sep=""), all_conditional, width=10, height=5)
+
