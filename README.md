@@ -1,5 +1,5 @@
 
-R code for the empirical application in <a href="[http://example.com](https://arxiv.org/abs/2306.16591)" target="_blank">Yu and Elwert (2023)</a>. <br /><br />
+R code for the empirical application in <a href="https://arxiv.org/abs/2306.16591" target="_blank">Yu and Elwert (2023)</a>. <br /><br />
 Using raw NLSY1979 data, first run "Data_preparation", which cleans the data. <br /><br />
 Then, "Analysis" is used to get the main results, i.e., Figure 1 in the main text, and Tables A2, A3, and A4 in Appendix G.  <br /> <br />
 "Missingness" is for Table A1 in Appendix G. <br /> <br />
