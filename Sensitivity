@@ -142,7 +142,7 @@ pred_data[,G] <- 1
 pred_ranger <- mean( predict(DgivenGQ.Model, newdata = pred_data, type="prob")[,2] )
 
 data[,D] <- as.numeric(data[,D])-1
-##### get the benchmark \rho_{1b} and \rho_{2b}
+##### get the benchmarks \rho_{1b} and \rho_{2b}
 C <- X[!X%in%"edu_exp"]
 
 rho1_exp <- coef( lm( as.formula(paste("edu_exp", paste(c(D,C), collapse="+"), sep="~")) , data=data[data[,G]==0, ] ) )[2]
@@ -151,13 +151,15 @@ rho2_exp <- coef( lm( as.formula(paste(Y, paste(c(D,X), collapse="+"), sep="~"))
 rho1_seq <- seq(0, 4*rho1_exp, length.out=100)
 rho2_seq <- seq(0, 4*rho2_exp, length.out=100)
 contour_data <- as.data.frame(expand.grid(rho1 = rho1_seq, rho2 = rho2_seq))
+
+
 ### plot for nnet
 contour_data$prevalence <- 0.031-contour_data$rho1*contour_data$rho2*(mean(data[data[,G]==1, D]) - mean(data[data[,G]==0, D]))
 contour_data$cond_prevalence <- 0.010-contour_data$rho1*contour_data$rho2*(mean(pred_nnet) - mean(data[data[,G]==0, D]))
 
 nnet_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) +
   geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.009,0.018,0.027)) +
-  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue", shape = 15, shape = 15) +
   annotate("text", x=rho1_exp, y=rho2_exp+0.01, 
            label = "(0.27,0.05)", size=3) +
   geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
@@ -172,7 +174,7 @@ nnet_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence))
 
 nnet_cond_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = cond_prevalence)) +
   geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.002,0.004,0.006)) +
-  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue", shape = 15) +
   annotate("text", x=rho1_exp+0.05, y=rho2_exp+0.01, 
            label = "(0.27,0.05)", size=3) +
   geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
@@ -191,7 +193,7 @@ contour_data$cond_prevalence <- 0.007-contour_data$rho1*contour_data$rho2*(mean(
 
 gbm_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) +
   geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.009,0.018,0.027)) +
-  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue", shape = 15) +
   annotate("text", x=rho1_exp, y=rho2_exp+0.01, 
            label = "(0.27,0.05)", size=3) +
   geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
@@ -206,7 +208,7 @@ gbm_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) 
 
 gbm_cond_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = cond_prevalence)) +
   geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.002,0.004,0.006)) +
-  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue", shape = 15) +
   annotate("text", x=rho1_exp+0.03, y=rho2_exp+0.01, 
            label = "(0.27,0.05)", size=3) +
   geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
@@ -225,7 +227,7 @@ contour_data$cond_prevalence <- 0.013-contour_data$rho1*contour_data$rho2*(mean(
 
 ranger_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) +
   geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.009,0.018,0.027)) +
-  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue", shape = 15) +
   annotate("text", x=rho1_exp, y=rho2_exp+0.01, 
            label = "(0.27,0.05)", size=3) +
   geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
@@ -240,7 +242,7 @@ ranger_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence
 
 ranger_cond_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = cond_prevalence)) +
   geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.002,0.004,0.006)) +
-  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue", shape = 15) +
   annotate("text", x=rho1_exp+0.05, y=rho2_exp+0.01, 
            label = "(0.27,0.05)", size=3) +
   geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
@@ -259,7 +261,7 @@ contour_data$cond_prevalence <- 0.009-contour_data$rho1*contour_data$rho2*(mean(
 
 para_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence)) +
   geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.009,0.018,0.027)) +
-  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue", shape = 15) +
   annotate("text", x=rho1_exp, y=rho2_exp+0.01, 
            label = "(0.27,0.05)", size=3) +
   geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
@@ -274,7 +276,7 @@ para_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = prevalence))
 
 para_cond_prevalence <- ggplot(contour_data, aes(x = rho1, y = rho2, z = cond_prevalence)) +
   geom_contour(aes(colour = factor(after_stat(level))), breaks = c(0,0.002,0.004,0.006)) +
-  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue") +
+  geom_point(aes(x = rho1_exp, y = rho2_exp), color = "blue", shape = 15) +
   annotate("text", x=rho1_exp+0.03, y=rho2_exp+0.01, 
            label = "(0.27,0.05)", size=3) +
   geom_point(aes(x = rho1_exp*2, y = rho2_exp*2), color = "red") +
